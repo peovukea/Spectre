@@ -1,0 +1,75 @@
+using Spectre.CdmIngestion;
+
+namespace Spectre.CdmIngestion.Tests;
+
+public sealed class CdmIngestionRunnerTests
+{
+    [Fact]
+    public void ValidationFailure_DoesNotCreateSinkOrStartIngestion()
+    {
+        using var temp = new TempDirectory();
+        System.IO.File.WriteAllText(temp.File("family.bin.1"), "");
+        var sinkCreated = false;
+        var runner = CreateRunner([]);
+
+        var result = runner.Run(
+            [temp.Path],
+            () =>
+            {
+                sinkCreated = true;
+                return new NullGraphFactSink();
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(CdmIngestionOutcome.Failed, result.Outcome);
+        Assert.False(sinkCreated);
+        Assert.Null(result.Metrics.ProcessingStartedAt);
+        Assert.NotEqual(default, result.Metrics.ProcessingEndedAt);
+    }
+
+    [Fact]
+    public void Cancellation_PreservesPartialMetricsWithoutCountingCurrentFileOrFamily()
+    {
+        using var temp = new TempDirectory();
+        System.IO.File.WriteAllText(temp.File("family.bin"), "");
+        using var cancellation = new CancellationTokenSource();
+        var datum = new SourcedEntityDatum(
+            Guid.NewGuid(),
+            "Subject",
+            "SUBJECT_PROCESS",
+            new Dictionary<string, string> { ["HAS_ALPHA"] = "a" },
+            false,
+            new SourceLocation(temp.File("family.bin"), 0));
+        var runner = CreateRunner([datum]);
+
+        var result = runner.Run(
+            [temp.Path],
+            () => new CancelAfterWriteSink(cancellation),
+            cancellation.Token);
+
+        Assert.Equal(CdmIngestionOutcome.Canceled, result.Outcome);
+        Assert.Equal(1, result.Metrics.RecordsRead);
+        Assert.Equal(1, result.Metrics.FactsWritten);
+        Assert.Equal(0, result.Metrics.InputFilesProcessed);
+        Assert.Equal(0, result.Metrics.InputFamiliesProcessed);
+        Assert.NotNull(result.Metrics.ProcessingStartedAt);
+        Assert.NotEqual(default, result.Metrics.ProcessingEndedAt);
+    }
+
+    private static CdmIngestionRunner CreateRunner(IEnumerable<SourcedCdmDatum> data)
+    {
+        return new CdmIngestionRunner(
+            new CdmFactIngestionPipeline(
+                new StubReader(data),
+                new GraphFactProjector()));
+    }
+
+    private sealed class CancelAfterWriteSink(CancellationTokenSource cancellation) : IGraphFactSink
+    {
+        public void Write(GraphFact fact) => cancellation.Cancel();
+
+        public void Dispose()
+        {
+        }
+    }
+}

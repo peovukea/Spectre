@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Spectre.CdmIngestion/Spectre.CdmIngestion.csproj" />
+  <Project Path="Spectre.CdmIngestion.Cli/Spectre.CdmIngestion.Cli.csproj" />
+  <Project Path="Spectre.CdmIngestion.Tests/Spectre.CdmIngestion.Tests.csproj" />
+</Solution>

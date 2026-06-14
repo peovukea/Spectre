@@ -1,0 +1,107 @@
+# CDM Graph-Fact Ingestion
+
+This .NET 10 solution synchronously and lazily streams DARPA CDM18 Avro
+object-container families into typed graph facts. The capability ends when an
+`IGraphFactSink` accepts a fact; it intentionally does not build or reconcile
+graph state.
+
+## Projects
+
+| Project | Purpose |
+|---|---|
+| [`Spectre.CdmIngestion`](Spectre.CdmIngestion/README.md) | Reusable family discovery, Avro reader, normalized datum boundary, projector, sinks, and metrics. |
+| [`Spectre.CdmIngestion.Cli`](Spectre.CdmIngestion.Cli/README.md) | Executable host with sample JSONL output, Ctrl+C cancellation, and partial metrics. |
+| [`Spectre.CdmIngestion.Tests`](Spectre.CdmIngestion.Tests/README.md) | Unit and deterministic Avro object-container tests. |
+| [`tools/GenerateCdm18`](tools/GenerateCdm18/README.md) | Explicit CDM18 specific-record generation tool. |
+
+## Data Flow
+
+```text
+input arguments
+  -> global family discovery and validation
+  -> lazy specific-record Avro reading
+  -> sourced normalized datums
+  -> typed GraphFact projection
+  -> IGraphFactSink
+```
+
+All inputs are validated before any Avro segment or output sink is opened.
+Families use a base `<family>.bin` followed by contiguous optional segments
+`<family>.bin.1`, `<family>.bin.2`, and so on. Families from all input arguments
+are merged and processed in global ordinal base-path order.
+
+## Build And Test
+
+```powershell
+dotnet build Spectre.CdmIngestion.slnx
+dotnet test Spectre.CdmIngestion.slnx
+```
+
+## Run
+
+Create the default capped JSONL sample:
+
+```powershell
+dotnet run --project Spectre.CdmIngestion.Cli -- `
+  --input data/cadets `
+  --sample-output output/graphfacts.sample.jsonl `
+  --sample-limit 50000
+```
+
+Run the entire ingestion path without creating sample output:
+
+```powershell
+dotnet run --project Spectre.CdmIngestion.Cli -c Release -- `
+  --input data/cadets `
+  --metrics-only
+```
+
+`--input` is repeatable and accepts directories or base `.bin` paths. Direct
+numbered-segment inputs are rejected. The default sample path is
+`output/graphfacts.sample.jsonl`, and the default sample limit is `50000`.
+
+Press Ctrl+C for cooperative cancellation. The CLI flushes partial output,
+prints partial metrics, and exits with code `130`.
+
+## Runtime Baseline
+
+On June 14, 2026, the Release metrics-only pipeline processed the complete
+local CADETS dataset in this workspace:
+
+| Measurement | Result |
+|---|---:|
+| Input | 10 files, 3 families, 9.43 GiB |
+| Wall-clock time | 8 minutes 22 seconds |
+| Records read | 44,404,339 |
+| Facts accepted | 52,874,058 |
+| Average input throughput | 19.3 MiB/s |
+| Average record throughput | 88,500 records/s |
+
+For this machine and dataset, plan on roughly **9 minutes** for a full
+metrics-only or default capped-sample run. Allow **10-15 minutes** operationally
+for storage contention, cold filesystem cache, antivirus scanning, or different
+record mixes. An uncapped JSONL sink would be substantially slower and produce
+very large output.
+
+## Output And Metrics
+
+Sample JSONL facts flatten source location as `sourceFile` and `sourceOffset`.
+The offset identifies the previous Avro sync block, not an exact per-record byte
+position.
+
+The final metrics report includes records and facts processed, fact variants,
+skipped and malformed records, completed files and families, and UTC processing
+timestamps. Failed and canceled runs preserve and print partial metrics.
+
+## Generated CDM18 Records
+
+The committed files under `Spectre.CdmIngestion/Generated/Cdm18` are generated
+from `TCCDMDatum.avsc`. Their CLR namespace intentionally matches the Avro
+full-name namespace so Apache Avro specific-record resolution remains compatible
+with the embedded writer schema.
+
+Regeneration is an explicit developer action and is not part of normal builds:
+
+```powershell
+dotnet run --project tools/GenerateCdm18
+```
