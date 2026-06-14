@@ -3,7 +3,7 @@ namespace Spectre.CdmIngestion.Sinks;
 /// <summary>
 /// Forwards each graph fact to multiple child sinks in configured order.
 /// </summary>
-public sealed class CompositeGraphFactSink : IGraphFactSink
+public sealed class CompositeGraphFactSink : IGraphFactFamilySink
 {
     private readonly IReadOnlyList<IGraphFactSink> _sinks;
     private bool _disposed;
@@ -29,6 +29,30 @@ public sealed class CompositeGraphFactSink : IGraphFactSink
         foreach (var sink in _sinks)
         {
             sink.Write(fact);
+        }
+    }
+
+    /// <inheritdoc />
+    public void BeginFamily(string familyBasePath)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(familyBasePath);
+
+        foreach (var sink in _sinks.OfType<IGraphFactFamilySink>())
+        {
+            sink.BeginFamily(familyBasePath);
+        }
+    }
+
+    /// <inheritdoc />
+    public void EndFamily(string familyBasePath)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentException.ThrowIfNullOrWhiteSpace(familyBasePath);
+
+        foreach (var sink in _sinks.OfType<IGraphFactFamilySink>())
+        {
+            sink.EndFamily(familyBasePath);
         }
     }
 

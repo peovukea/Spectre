@@ -12,6 +12,8 @@ graph state.
 | [`Spectre.CdmIngestion`](Spectre.CdmIngestion/README.md) | Reusable family discovery, Avro reader, normalized datum boundary, projector, sinks, and metrics. |
 | [`Spectre.CdmIngestion.Cli`](Spectre.CdmIngestion.Cli/README.md) | Executable host with sample JSONL output, Ctrl+C cancellation, and partial metrics. |
 | [`Spectre.CdmIngestion.Tests`](Spectre.CdmIngestion.Tests/README.md) | Unit and deterministic Avro object-container tests. |
+| [`Spectre.SemanticIndexing`](Spectre.SemanticIndexing/README.md) | Streaming Layer 2 behavioral documents, semantic interactions, TF-IDF, and exact Jaccard scoring. |
+| [`Spectre.SemanticIndexing.Tests`](Spectre.SemanticIndexing.Tests) | Focused handcrafted graph-fact tests for Layer 2. |
 | [`tools/GenerateCdm18`](tools/GenerateCdm18/README.md) | Explicit CDM18 specific-record generation tool. |
 
 ## Data Flow

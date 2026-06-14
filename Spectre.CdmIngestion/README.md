@@ -40,6 +40,7 @@ remain lazy, and the pipeline checks cancellation between datums and sink writes
 
 - `ICdmRecordReader`: lazily reads normalized, source-located CDM datums.
 - `IGraphFactSink`: accepts typed `EdgeFact` and `AttributeFact` values.
+- `IGraphFactFamilySink`: optional sink lifecycle for logical family boundaries.
 - `CdmIngestionResult`: reports outcome, metrics, and an optional failure.
 - `SourceLocation`: identifies a physical segment and Avro sync-block offset.
 

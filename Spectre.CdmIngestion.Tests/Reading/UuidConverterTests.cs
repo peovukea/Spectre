@@ -1,5 +1,5 @@
 using com.bbn.tc.schema.avro.cdm18;
-using Spectre.CdmIngestion.Reading;
+using Spectre.CdmIngestion.Readers;
 
 namespace Spectre.CdmIngestion.Tests.Reading;
 

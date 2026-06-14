@@ -5,4 +5,6 @@
   <Project Path="Spectre.CdmIngestion.Cli/Spectre.CdmIngestion.Cli.csproj" />
   <Project Path="Spectre.CdmIngestion.Tests/Spectre.CdmIngestion.Tests.csproj" />
   <Project Path="Spectre.CdmIngestion/Spectre.CdmIngestion.csproj" />
+  <Project Path="Spectre.SemanticIndexing.Tests/Spectre.SemanticIndexing.Tests.csproj" />
+  <Project Path="Spectre.SemanticIndexing/Spectre.SemanticIndexing.csproj" />
 </Solution>

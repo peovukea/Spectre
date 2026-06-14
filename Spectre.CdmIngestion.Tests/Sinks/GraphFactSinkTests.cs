@@ -45,9 +45,38 @@ public sealed class GraphFactSinkTests
         Assert.Empty(last.Facts);
     }
 
+    [Fact]
+    public void Composite_ForwardsFamilyLifecycleOnlyToFamilyAwareChildren()
+    {
+        var familyAware = new FamilyTrackingSink();
+        using var sink = new CompositeGraphFactSink([new CollectingSink(), familyAware]);
+
+        sink.BeginFamily("family.bin");
+        sink.EndFamily("family.bin");
+
+        Assert.Equal(["BEGIN:family.bin", "END:family.bin"], familyAware.Events);
+    }
+
     private sealed class ThrowingSink : IGraphFactSink
     {
         public void Write(GraphFact fact) => throw new InvalidOperationException("sink failed");
+
+        public void Dispose()
+        {
+        }
+    }
+
+    private sealed class FamilyTrackingSink : IGraphFactFamilySink
+    {
+        public List<string> Events { get; } = [];
+
+        public void BeginFamily(string familyBasePath) => Events.Add($"BEGIN:{familyBasePath}");
+
+        public void EndFamily(string familyBasePath) => Events.Add($"END:{familyBasePath}");
+
+        public void Write(GraphFact fact)
+        {
+        }
 
         public void Dispose()
         {

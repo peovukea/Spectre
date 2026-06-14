@@ -2,7 +2,7 @@ using System.Text.Json;
 using Spectre.CdmIngestion;
 using Spectre.CdmIngestion.Pipeline;
 using Spectre.CdmIngestion.Projection;
-using Spectre.CdmIngestion.Reading;
+using Spectre.CdmIngestion.Readers;
 using Spectre.CdmIngestion.Sinks;
 
 CliOptions options;

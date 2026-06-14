@@ -27,6 +27,9 @@ public sealed class IngestionPipeline(
     {
         foreach (var family in families)
         {
+            var familySink = sink as IGraphFactFamilySink;
+            familySink?.BeginFamily(family.BasePath);
+
             foreach (var segmentPath in family.SegmentPaths)
             {
                 foreach (var datum in reader.ReadFile(segmentPath, cancellationToken))
@@ -54,6 +57,7 @@ public sealed class IngestionPipeline(
                 metrics.InputFilesProcessed++;
             }
 
+            familySink?.EndFamily(family.BasePath);
             metrics.InputFamiliesProcessed++;
         }
     }

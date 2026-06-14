@@ -2,7 +2,8 @@ using Avro.File;
 using Avro.Specific;
 using com.bbn.tc.schema.avro.cdm18;
 using Spectre.CdmIngestion;
-using Spectre.CdmIngestion.Reading;
+using Spectre.CdmIngestion.Readers;
+using Spectre.CdmIngestion.Readers.Exceptions;
 
 namespace Spectre.CdmIngestion.Tests.Reading;
 
