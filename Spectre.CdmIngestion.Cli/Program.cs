@@ -1,5 +1,9 @@
 using System.Text.Json;
 using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Pipeline;
+using Spectre.CdmIngestion.Projection;
+using Spectre.CdmIngestion.Reading;
+using Spectre.CdmIngestion.Sinks;
 
 CliOptions options;
 try
@@ -29,9 +33,9 @@ Console.CancelKeyPress += cancelHandler;
 
 try
 {
-    var reader = new DarpaCdm18AvroReader(Console.Error.WriteLine);
+    var reader = new AvroReader(Console.Error.WriteLine);
     var projector = new GraphFactProjector();
-    var pipeline = new CdmFactIngestionPipeline(reader, projector);
+    var pipeline = new IngestionPipeline(reader, projector);
     var runner = new CdmIngestionRunner(pipeline);
 
     var result = runner.Run(
@@ -50,9 +54,9 @@ try
 
     return result.Outcome switch
     {
-        CdmIngestionOutcome.Completed => 0,
-        CdmIngestionOutcome.Canceled => 130,
-        CdmIngestionOutcome.Failed => 1,
+        IngestionOutcome.Completed => 0,
+        IngestionOutcome.Canceled => 130,
+        IngestionOutcome.Failed => 1,
         _ => 1
     };
 }

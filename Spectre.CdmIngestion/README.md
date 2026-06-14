@@ -4,6 +4,28 @@ Reusable, synchronous CDM18 Avro ingestion library. It validates and orders
 CADETS input families, lazily reads specific-record Avro containers, normalizes
 records, projects typed graph facts, and writes them to an `IGraphFactSink`.
 
+## Layout
+
+```
+Spectre.CdmIngestion/
+├── Contracts.cs              # SourceLocation, GraphFact, Sourced*Datum, ICdmRecordReader
+├── Reading/                  # CDM18 Avro segment reading
+│   ├── CdmUuidConverter.cs
+│   └── DarpaCdm18AvroReader.cs
+├── Projection/               # datum -> GraphFact
+│   └── GraphFactProjector.cs
+├── Pipeline/                 # preflight, orchestration, metrics, outcome
+│   ├── CdmIngestionPipeline.cs
+│   └── CdmInputFamilyDiscovery.cs
+├── Sinks/                    # IGraphFactSink + built-in implementations
+│   ├── IGraphFactSink.cs
+│   ├── NullGraphFactSink.cs
+│   ├── SampleJsonlGraphFactSink.cs
+│   └── CompositeGraphFactSink.cs
+└── Generated/                # regenerated Avro records (see below)
+    └── Cdm18/
+```
+
 ## Pipeline
 
 1. `CdmInputFamilyDiscovery` expands and validates every input before ingestion.
@@ -17,7 +39,6 @@ remain lazy, and the pipeline checks cancellation between datums and sink writes
 ## Main Contracts
 
 - `ICdmRecordReader`: lazily reads normalized, source-located CDM datums.
-- `IGraphFactProjector`: projects one normalized datum at a time.
 - `IGraphFactSink`: accepts typed `EdgeFact` and `AttributeFact` values.
 - `CdmIngestionResult`: reports outcome, metrics, and an optional failure.
 - `SourceLocation`: identifies a physical segment and Avro sync-block offset.

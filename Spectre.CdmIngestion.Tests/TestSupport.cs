@@ -2,6 +2,7 @@ using Avro.File;
 using Avro.Specific;
 using com.bbn.tc.schema.avro.cdm18;
 using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Sinks;
 
 namespace Spectre.CdmIngestion.Tests;
 

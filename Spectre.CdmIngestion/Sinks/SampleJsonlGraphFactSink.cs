@@ -1,23 +1,7 @@
 using System.Text;
 using System.Text.Json;
 
-namespace Spectre.CdmIngestion;
-
-/// <summary>
-/// Accepts and discards all graph facts.
-/// </summary>
-public sealed class NullGraphFactSink : IGraphFactSink
-{
-    /// <inheritdoc />
-    public void Write(GraphFact fact)
-    {
-    }
-
-    /// <inheritdoc />
-    public void Dispose()
-    {
-    }
-}
+namespace Spectre.CdmIngestion.Sinks;
 
 /// <summary>
 /// Writes a bounded, buffered JSONL sample of the graph-fact stream.
@@ -54,7 +38,10 @@ public sealed class SampleJsonlGraphFactSink : IGraphFactSink
         _writer = new StreamWriter(
             new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.Read, 64 * 1024),
             new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            bufferSize: 64 * 1024);
+            bufferSize: 64 * 1024)
+        {
+            NewLine = "\n"
+        };
     }
 
     /// <inheritdoc />
@@ -108,72 +95,5 @@ public sealed class SampleJsonlGraphFactSink : IGraphFactSink
 
         _disposed = true;
         _writer.Dispose();
-    }
-}
-
-/// <summary>
-/// Forwards each graph fact to multiple child sinks in configured order.
-/// </summary>
-public sealed class CompositeGraphFactSink : IGraphFactSink
-{
-    private readonly IReadOnlyList<IGraphFactSink> _sinks;
-    private bool _disposed;
-
-    /// <summary>
-    /// Initializes a composite sink.
-    /// </summary>
-    /// <param name="sinks">Child sinks invoked in enumeration order.</param>
-    public CompositeGraphFactSink(IEnumerable<IGraphFactSink> sinks)
-    {
-        _sinks = sinks?.ToArray() ?? throw new ArgumentNullException(nameof(sinks));
-    }
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// Forwarding stops when a child throws. Child sinks that already accepted the fact are not rolled back.
-    /// </remarks>
-    public void Write(GraphFact fact)
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);
-
-        foreach (var sink in _sinks)
-        {
-            sink.Write(fact);
-        }
-    }
-
-    /// <inheritdoc />
-    /// <remarks>Child sinks are disposed in reverse order.</remarks>
-    public void Dispose()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        List<Exception>? exceptions = null;
-
-        for (var index = _sinks.Count - 1; index >= 0; index--)
-        {
-            try
-            {
-                _sinks[index].Dispose();
-            }
-            catch (Exception exception)
-            {
-                (exceptions ??= []).Add(exception);
-            }
-        }
-
-        if (exceptions is { Count: 1 })
-        {
-            throw exceptions[0];
-        }
-
-        if (exceptions is { Count: > 1 })
-        {
-            throw new AggregateException("One or more graph-fact sinks failed during disposal.", exceptions);
-        }
     }
 }

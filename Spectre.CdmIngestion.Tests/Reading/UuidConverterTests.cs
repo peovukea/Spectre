@@ -1,9 +1,9 @@
 using com.bbn.tc.schema.avro.cdm18;
-using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Reading;
 
-namespace Spectre.CdmIngestion.Tests;
+namespace Spectre.CdmIngestion.Tests.Reading;
 
-public sealed class CdmUuidConverterTests
+public sealed class UuidConverterTests
 {
     [Fact]
     public void Convert_UsesBigEndianUuidLayout()
@@ -13,7 +13,7 @@ public sealed class CdmUuidConverterTests
             Value = Convert.FromHexString("00112233445566778899aabbccddeeff")
         };
 
-        var result = CdmUuidConverter.Convert(uuid);
+        var result = UuidConverter.Convert(uuid);
 
         Assert.Equal("00112233-4455-6677-8899-aabbccddeeff", result.ToString("D"));
     }

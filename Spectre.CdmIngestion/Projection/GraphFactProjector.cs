@@ -1,4 +1,6 @@
-namespace Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Pipeline;
+
+namespace Spectre.CdmIngestion.Projection;
 
 /// <summary>
 /// Projects normalized sourced CDM datums into typed graph facts.
@@ -11,7 +13,7 @@ public sealed class GraphFactProjector
     /// <param name="datum">Normalized sourced datum to project.</param>
     /// <param name="metrics">Metrics instance updated for skipped, malformed, or diagnostic records.</param>
     /// <returns>Zero or more facts in deterministic emission order.</returns>
-    public IEnumerable<GraphFact> Project(SourcedCdmDatum datum, CdmIngestionMetrics metrics)
+    public IEnumerable<GraphFact> Project(SourcedCdmDatum datum, IngestionMetrics metrics)
     {
         switch (datum)
         {
@@ -73,7 +75,7 @@ public sealed class GraphFactProjector
 
     private static IEnumerable<GraphFact> ProjectEvent(
         SourcedEventDatum datum,
-        CdmIngestionMetrics metrics)
+        IngestionMetrics metrics)
     {
         var missingSubject = datum.SubjectId is null;
         var missingObject = datum.PredicateObjectId is null && datum.PredicateObject2Id is null;

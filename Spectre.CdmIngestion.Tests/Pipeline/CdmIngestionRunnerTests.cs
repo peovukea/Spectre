@@ -1,6 +1,9 @@
 using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Pipeline;
+using Spectre.CdmIngestion.Projection;
+using Spectre.CdmIngestion.Sinks;
 
-namespace Spectre.CdmIngestion.Tests;
+namespace Spectre.CdmIngestion.Tests.Pipeline;
 
 public sealed class CdmIngestionRunnerTests
 {
@@ -21,7 +24,7 @@ public sealed class CdmIngestionRunnerTests
             },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(CdmIngestionOutcome.Failed, result.Outcome);
+        Assert.Equal(IngestionOutcome.Failed, result.Outcome);
         Assert.False(sinkCreated);
         Assert.Null(result.Metrics.ProcessingStartedAt);
         Assert.NotEqual(default, result.Metrics.ProcessingEndedAt);
@@ -47,7 +50,7 @@ public sealed class CdmIngestionRunnerTests
             () => new CancelAfterWriteSink(cancellation),
             cancellation.Token);
 
-        Assert.Equal(CdmIngestionOutcome.Canceled, result.Outcome);
+        Assert.Equal(IngestionOutcome.Canceled, result.Outcome);
         Assert.Equal(1, result.Metrics.RecordsRead);
         Assert.Equal(1, result.Metrics.FactsWritten);
         Assert.Equal(0, result.Metrics.InputFilesProcessed);
@@ -59,7 +62,7 @@ public sealed class CdmIngestionRunnerTests
     private static CdmIngestionRunner CreateRunner(IEnumerable<SourcedCdmDatum> data)
     {
         return new CdmIngestionRunner(
-            new CdmFactIngestionPipeline(
+            new IngestionPipeline(
                 new StubReader(data),
                 new GraphFactProjector()));
     }

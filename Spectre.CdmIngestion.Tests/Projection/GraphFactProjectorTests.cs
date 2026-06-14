@@ -1,6 +1,8 @@
 using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Pipeline;
+using Spectre.CdmIngestion.Projection;
 
-namespace Spectre.CdmIngestion.Tests;
+namespace Spectre.CdmIngestion.Tests.Projection;
 
 public sealed class GraphFactProjectorTests
 {
@@ -21,7 +23,7 @@ public sealed class GraphFactProjectorTests
             },
             UnknownSubjectSubtype: false,
             Source);
-        var metrics = new CdmIngestionMetrics();
+        var metrics = new IngestionMetrics();
 
         var predicates = new GraphFactProjector()
             .Project(datum, metrics)
@@ -44,7 +46,7 @@ public sealed class GraphFactProjectorTests
             "EVENT_READ",
             123,
             Source);
-        var metrics = new CdmIngestionMetrics();
+        var metrics = new IngestionMetrics();
 
         var facts = new GraphFactProjector().Project(datum, metrics).ToArray();
 
@@ -69,7 +71,7 @@ public sealed class GraphFactProjectorTests
             Source);
 
         var facts = new GraphFactProjector()
-            .Project(datum, new CdmIngestionMetrics())
+            .Project(datum, new IngestionMetrics())
             .Cast<EdgeFact>()
             .ToArray();
 

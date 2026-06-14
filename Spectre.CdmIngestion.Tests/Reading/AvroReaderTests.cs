@@ -2,18 +2,19 @@ using Avro.File;
 using Avro.Specific;
 using com.bbn.tc.schema.avro.cdm18;
 using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Reading;
 
-namespace Spectre.CdmIngestion.Tests;
+namespace Spectre.CdmIngestion.Tests.Reading;
 
-public sealed class DarpaCdm18AvroReaderTests
+public sealed class AvroReaderTests
 {
     [Fact]
     public void ReadFile_IsLazyAndDoesNotOpenUntilEnumeration()
     {
         var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"), "missing.bin");
-        var data = new DarpaCdm18AvroReader().ReadFile(path, CancellationToken.None);
+        var data = new AvroReader().ReadFile(path, CancellationToken.None);
 
-        var exception = Assert.Throws<CdmSegmentReadException>(() => data.ToArray());
+        var exception = Assert.Throws<SegmentReadException>(() => data.ToArray());
 
         Assert.Contains(Path.GetFullPath(path), exception.Message, StringComparison.Ordinal);
     }
@@ -30,7 +31,7 @@ public sealed class DarpaCdm18AvroReaderTests
             AvroFixtureBuilder.Envelope(AvroFixtureBuilder.Subject(firstId, SubjectType.SUBJECT_THREAD)),
             AvroFixtureBuilder.Envelope(AvroFixtureBuilder.Subject(secondId)));
 
-        var data = new DarpaCdm18AvroReader()
+        var data = new AvroReader()
             .ReadFile(path, CancellationToken.None)
             .Cast<SourcedEntityDatum>()
             .ToArray();
@@ -52,8 +53,8 @@ public sealed class DarpaCdm18AvroReaderTests
             writer.Append(new StartMarker { sessionNumber = 1 });
         }
 
-        var exception = Assert.Throws<CdmSegmentReadException>(
-            () => new DarpaCdm18AvroReader().ReadFile(path, CancellationToken.None).ToArray());
+        var exception = Assert.Throws<SegmentReadException>(
+            () => new AvroReader().ReadFile(path, CancellationToken.None).ToArray());
 
         Assert.Contains(Path.GetFullPath(path), exception.Message, StringComparison.Ordinal);
     }
@@ -71,8 +72,8 @@ public sealed class DarpaCdm18AvroReaderTests
         var bytes = System.IO.File.ReadAllBytes(validPath);
         System.IO.File.WriteAllBytes(truncatedPath, bytes[..^8]);
 
-        var exception = Assert.Throws<CdmSegmentReadException>(
-            () => new DarpaCdm18AvroReader()
+        var exception = Assert.Throws<SegmentReadException>(
+            () => new AvroReader()
                 .ReadFile(truncatedPath, CancellationToken.None)
                 .ToArray());
 

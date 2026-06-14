@@ -1,6 +1,7 @@
 using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Pipeline;
 
-namespace Spectre.CdmIngestion.Tests;
+namespace Spectre.CdmIngestion.Tests.Pipeline;
 
 public sealed class CdmInputFamilyDiscoveryTests
 {
@@ -14,7 +15,7 @@ public sealed class CdmInputFamilyDiscoveryTests
         System.IO.File.WriteAllText(temp.File("a.bin"), "");
         System.IO.File.WriteAllText(temp.File("ignore.binlog"), "");
 
-        var families = CdmInputFamilyDiscovery.DiscoverAndValidate([temp.Path]);
+        var families = CdmInputFamilyDiscovery.Resolve([temp.Path]);
 
         Assert.Equal(["a.bin", "z.bin"], families.Select(family => Path.GetFileName(family.BasePath)));
         Assert.Equal(
@@ -29,8 +30,8 @@ public sealed class CdmInputFamilyDiscoveryTests
         System.IO.File.WriteAllText(temp.File("family.bin"), "");
         System.IO.File.WriteAllText(temp.File("family.bin.1"), "");
 
-        Assert.Throws<CdmInputValidationException>(
-            () => CdmInputFamilyDiscovery.DiscoverAndValidate([temp.File("family.bin.1")]));
+        Assert.Throws<InputValidationException>(
+            () => CdmInputFamilyDiscovery.Resolve([temp.File("family.bin.1")]));
     }
 
     [Fact]
@@ -40,8 +41,8 @@ public sealed class CdmInputFamilyDiscoveryTests
         var basePath = temp.File("family.bin");
         System.IO.File.WriteAllText(basePath, "");
 
-        Assert.Throws<CdmInputValidationException>(
-            () => CdmInputFamilyDiscovery.DiscoverAndValidate([temp.Path, basePath]));
+        Assert.Throws<InputValidationException>(
+            () => CdmInputFamilyDiscovery.Resolve([temp.Path, basePath]));
     }
 
     [Fact]
@@ -51,7 +52,7 @@ public sealed class CdmInputFamilyDiscoveryTests
         System.IO.File.WriteAllText(temp.File("family.bin"), "");
         System.IO.File.WriteAllText(temp.File("family.bin.2"), "");
 
-        Assert.Throws<CdmInputValidationException>(
-            () => CdmInputFamilyDiscovery.DiscoverAndValidate([temp.Path]));
+        Assert.Throws<InputValidationException>(
+            () => CdmInputFamilyDiscovery.Resolve([temp.Path]));
     }
 }

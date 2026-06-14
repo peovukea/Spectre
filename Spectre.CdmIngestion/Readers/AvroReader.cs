@@ -5,23 +5,24 @@ using System.Text;
 using Avro.File;
 using Avro.Specific;
 using com.bbn.tc.schema.avro.cdm18;
+using Spectre.CdmIngestion.Readers.Exceptions;
 using CdmEvent = com.bbn.tc.schema.avro.cdm18.Event;
 
-namespace Spectre.CdmIngestion;
+namespace Spectre.CdmIngestion.Readers;
 
 /// <summary>
 /// Streams and normalizes DARPA CDM18 Avro object-container segments using generated specific records.
 /// </summary>
 /// <param name="diagnosticLog">Optional callback used to report opened segment paths and writer schemas.</param>
-public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) : ICdmRecordReader
+public sealed class AvroReader(Action<string>? diagnosticLog = null) : ICdmRecordReader
 {
     /// <summary>
     /// Expected full name of the embedded Avro writer schema.
     /// </summary>
-    public const string ExpectedWriterSchemaFullName = "com.bbn.tc.schema.avro.cdm18.TCCDMDatum";
+    private const string ExpectedWriterSchemaFullName = "com.bbn.tc.schema.avro.cdm18.TCCDMDatum";
 
     /// <inheritdoc />
-    /// <exception cref="CdmSegmentReadException">
+    /// <exception cref="SegmentReadException">
     /// Thrown during enumeration when the file cannot be opened, validated, or deserialized.
     /// </exception>
     public IEnumerable<SourcedCdmDatum> ReadFile(string path, CancellationToken cancellationToken)
@@ -234,7 +235,7 @@ public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) :
                 throw new FormatException($"{cdmType} is missing its required UUID.");
             }
 
-            entityId = CdmUuidConverter.Convert(uuid);
+            entityId = UuidConverter.Convert(uuid);
         }
         catch (Exception exception) when (exception is FormatException or ArgumentException)
         {
@@ -333,7 +334,7 @@ public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) :
             return;
         }
 
-        if (rawProperties is not IDictionary<string, string> properties)
+        if (rawProperties is not IDictionary<string, string?> properties)
         {
             return;
         }
@@ -366,7 +367,7 @@ public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) :
             case UUID uuid:
                 try
                 {
-                    literal = CdmUuidConverter.Convert(uuid).ToString("D");
+                    literal = UuidConverter.Convert(uuid).ToString("D");
                     return true;
                 }
                 catch
@@ -391,7 +392,7 @@ public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) :
 
     private static Guid? ConvertOptionalRequiredUuid(UUID? uuid)
     {
-        return uuid is null ? null : CdmUuidConverter.Convert(uuid);
+        return uuid is null ? null : UuidConverter.Convert(uuid);
     }
 
     private static Guid? TryConvertOptionalUuid(UUID? uuid)
@@ -403,7 +404,7 @@ public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) :
 
         try
         {
-            return CdmUuidConverter.Convert(uuid);
+            return UuidConverter.Convert(uuid);
         }
         catch
         {
@@ -441,31 +442,8 @@ public sealed class DarpaCdm18AvroReader(Action<string>? diagnosticLog = null) :
         return result.ToString().Trim('_');
     }
 
-    private static CdmSegmentReadException Wrap(string path, string message, Exception? inner = null)
+    private static SegmentReadException Wrap(string path, string message, Exception? inner = null)
     {
-        return new CdmSegmentReadException(path, message, inner);
+        return new SegmentReadException(path, message, inner);
     }
-}
-
-/// <summary>
-/// Reports a physical CDM segment open, schema, or deserialization failure.
-/// </summary>
-public sealed class CdmSegmentReadException : IOException
-{
-    /// <summary>
-    /// Initializes a segment read exception.
-    /// </summary>
-    /// <param name="segmentPath">Physical segment associated with the failure.</param>
-    /// <param name="message">Failure description.</param>
-    /// <param name="innerException">Underlying I/O or Avro exception, when available.</param>
-    public CdmSegmentReadException(string segmentPath, string message, Exception? innerException = null)
-        : base($"{message} Segment: '{segmentPath}'.", innerException)
-    {
-        SegmentPath = segmentPath;
-    }
-
-    /// <summary>
-    /// Gets the physical segment associated with the failure.
-    /// </summary>
-    public string SegmentPath { get; }
 }

@@ -1,6 +1,6 @@
-using Spectre.CdmIngestion;
+using Spectre.CdmIngestion.Sinks;
 
-namespace Spectre.CdmIngestion.Tests;
+namespace Spectre.CdmIngestion.Tests.Sinks;
 
 public sealed class GraphFactSinkTests
 {
