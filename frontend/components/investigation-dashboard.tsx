@@ -2,6 +2,7 @@
 
 import { ApiError, api } from "@/lib/api";
 import type {
+  DirectionalDisparityScore,
   FamilyInfo,
   GraphFilters,
   GraphProjection,
@@ -29,6 +30,21 @@ const VISIBLE_WINDOW_COUNT = 5;
 function number(value?: number | null) {
   if (value == null) return "-";
   return new Intl.NumberFormat("en", { notation: value >= 1_000_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+}
+
+function decimal(value?: number | null, digits = 3) {
+  if (value == null) return "-";
+  return new Intl.NumberFormat("en", { maximumFractionDigits: digits }).format(value);
+}
+
+function percentage(part?: number | null, total?: number | null) {
+  if (part == null || total == null || total <= 0) return "-";
+  return `${((part / total) * 100).toFixed(1)}%`;
+}
+
+function probability(value?: number | null) {
+  if (value == null) return "Not evaluated";
+  return value < 0.001 ? value.toExponential(2) : value.toFixed(4);
 }
 
 function bytes(value?: number | null) {
@@ -217,7 +233,7 @@ export function InvestigationDashboard() {
     }
     setDetailLoading(true);
     try {
-      setSelected(await api.interaction(familyId, windowStart, edge.source, edge.target, edge.predicate));
+      setSelected(await api.interaction(familyId, windowStart, edge.source, edge.target));
     } catch (error) {
       if (error instanceof ApiError && error.status === 410) {
         await refreshWindows(familyId);
@@ -264,10 +280,20 @@ export function InvestigationDashboard() {
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
               <Stat label="Facts" value={status?.indexingMetrics?.factsRead} />
               <Stat label="Slices" value={status?.indexingMetrics?.slicesEmitted ?? memory?.totalSummaries} />
-              <Stat label="Documents" value={status?.indexingMetrics?.documentsClosed} />
-              <Stat label="Interactions" value={status?.indexingMetrics?.interactionsClosed} />
-              <Stat label="Late skipped" value={status?.indexingMetrics?.lateFactsSkipped} />
-              <Stat label="Unknown kinds" value={status?.indexingMetrics?.unknownNodeKindUses} />
+              <Stat label="Pair candidates" value={status?.filteringMetrics?.candidateEdges} />
+              <Stat label="Backbone nodes" value={status?.filteringMetrics?.retainedDocuments} />
+              <Stat label="Backbone edges" value={status?.filteringMetrics?.retainedEdges} />
+              <Stat
+                label="Edges retained"
+                value={percentage(status?.filteringMetrics?.retainedEdges, status?.filteringMetrics?.candidateEdges)}
+              />
+            </div>
+            <div className="mt-4 border-t border-[#1d3731] pt-3">
+              <ReductionBar
+                label="Cumulative semantic weight retained"
+                retained={status?.filteringMetrics?.retainedSemanticWeight}
+                source={status?.filteringMetrics?.sourceSemanticWeight}
+              />
             </div>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -290,7 +316,7 @@ export function InvestigationDashboard() {
                   </div>
                   <div className="flex gap-3 text-[10px] text-[#78958c]">
                     <span>{number(window.documentCount)} nodes</span>
-                    <span>{number(window.interactionCount)} edges</span>
+                    <span>{number(window.interactionCount)} / {number(window.reduction.candidateEdgeCount)} edges</span>
                   </div>
                 </button>
               ))}
@@ -303,7 +329,7 @@ export function InvestigationDashboard() {
             <Filter label="Min weight">
               <input className="control w-24 text-xs" type="number" min="0" step="1" value={filters.minWeight} onChange={(e) => setFilters({ ...filters, minWeight: Number(e.target.value) })} />
             </Filter>
-            <Filter label="Predicate">
+            <Filter label="Contains predicate">
               <select className="control w-44 text-xs" value={filters.predicate} onChange={(e) => setFilters({ ...filters, predicate: e.target.value })}>
                 <option value="">All predicates</option>
                 {predicates.map((predicate) => <option key={predicate}>{predicate}</option>)}
@@ -338,10 +364,11 @@ export function InvestigationDashboard() {
             <GraphCanvas graph={graph} loading={graphLoading} onNode={selectNode} onEdge={selectEdge} />
           </div>
 
-          <div className="panel grid grid-cols-2 gap-px overflow-hidden bg-[#1d3731] sm:grid-cols-4">
+          <div className="panel grid grid-cols-2 gap-px overflow-hidden bg-[#1d3731] sm:grid-cols-5">
             <BottomStat label="Projected nodes" value={graph?.nodes.length} />
             <BottomStat label="Projected edges" value={graph?.edges.length} />
-            <BottomStat label="Matching interactions" value={graph?.totalMatchingInteractions} />
+            <BottomStat label="Matching edges" value={graph?.totalMatchingEdges} />
+            <BottomStat label="Disparity alpha" value={selectedWindow ? decimal(selectedWindow.reduction.alpha, 4) : "-"} />
             <BottomStat label="Projection state" value={graph?.truncated ? "Truncated" : graph?.retentionLevel ?? "-"} />
           </div>
         </section>
@@ -377,8 +404,8 @@ export function InvestigationDashboard() {
   );
 }
 
-function Stat({ label, value }: { label: string; value?: number | null }) {
-  return <div><p className="mono text-[14px] font-semibold text-[#dcebe6]">{number(value)}</p><p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#78958c]">{label}</p></div>;
+function Stat({ label, value }: { label: string; value?: number | string | null }) {
+  return <div><p className="mono text-[14px] font-semibold text-[#dcebe6]">{typeof value === "number" ? number(value) : value ?? "-"}</p><p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#78958c]">{label}</p></div>;
 }
 
 function Filter({ label, children }: { label: string; children: React.ReactNode }) {
@@ -404,8 +431,17 @@ function EmptyDetail({ text }: { text: string }) {
 
 function WindowDetail({ window }: { window: SliceSummary }) {
   return <div className="space-y-4">
-    <div><p className="text-sm font-semibold">Window summary</p><p className="mono mt-1 text-[10px] text-[#78958c]">{window.windowStartIso}</p></div>
-    <div className="grid grid-cols-2 gap-2"><DetailMetric label="Documents" value={number(window.documentCount)} /><DetailMetric label="Interactions" value={number(window.interactionCount)} /><DetailMetric label="Max weight" value={number(window.maxSemanticWeight)} /><DetailMetric label="Total weight" value={number(window.totalSemanticWeight)} /></div>
+    <div className="flex items-start justify-between gap-3">
+      <div><p className="text-sm font-semibold">Disparity backbone</p><p className="mono mt-1 text-[10px] text-[#78958c]">{window.windowStartIso}</p></div>
+      <div className="rounded border border-[#2b6552] bg-[#102d24] px-2 py-1 text-right"><p className="eyebrow">Alpha</p><p className="mono mt-0.5 text-xs text-[#50e3a4]">{decimal(window.reduction.alpha, 4)}</p></div>
+    </div>
+    <ReductionFlow window={window} />
+    <div className="space-y-3 rounded border border-[#1d3731] bg-[#081411] p-3">
+      <ReductionBar label="Pair edges retained" retained={window.reduction.retainedEdgeCount} source={window.reduction.candidateEdgeCount} />
+      <ReductionBar label="Endpoint documents retained" retained={window.reduction.retainedDocumentCount} source={window.reduction.sourceDocumentCount} />
+      <ReductionBar label="Semantic weight retained" retained={window.reduction.retainedSemanticWeight} source={window.reduction.sourceSemanticWeight} />
+    </div>
+    <div className="grid grid-cols-2 gap-2"><DetailMetric label="Max edge weight" value={number(window.maxSemanticWeight)} /><DetailMetric label="Retained weight" value={number(window.reduction.retainedSemanticWeight)} /></div>
     <Distribution title="Node-kind overlap" mean={window.jaccardNodeKind.mean} p25={window.jaccardNodeKind.p25} p75={window.jaccardNodeKind.p75} />
     <Distribution title="Previous-self overlap" mean={window.jaccardPreviousSelf.mean} p25={window.jaccardPreviousSelf.p25} p75={window.jaccardPreviousSelf.p75} />
     <KeyValues title="Top predicates" values={window.predicateCounts} />
@@ -416,8 +452,17 @@ function WindowDetail({ window }: { window: SliceSummary }) {
 function Detail({ selected }: { selected: NodeDetail | InteractionDetail }) {
   if ("sourceId" in selected) {
     return <div className="space-y-4">
-      <div><p className="text-sm font-semibold text-[#f5b95f]">{selected.predicate}</p><p className="mono mt-2 break-all text-[9px] text-[#78958c]">{selected.sourceId}<br />to {selected.targetId}</p></div>
-      <div className="grid grid-cols-2 gap-2"><DetailMetric label="Count" value={number(selected.count)} /><DetailMetric label="Semantic weight" value={number(selected.semanticWeight)} /></div>
+      <div><p className="text-sm font-semibold text-[#f5b95f]">Backbone edge</p><p className="mono mt-2 break-all text-[9px] text-[#78958c]">{selected.sourceId}<br />to {selected.targetId}</p></div>
+      <div className="grid grid-cols-2 gap-2"><DetailMetric label="Total event count" value={number(selected.count)} /><DetailMetric label="Combined semantic weight" value={number(selected.semanticWeight)} /></div>
+      <div>
+        <p className="eyebrow mb-2">Retention decision</p>
+        <div className="space-y-2">
+          <DirectionalScoreCard title="Source outgoing" score={selected.sourceOutgoing} />
+          <DirectionalScoreCard title="Target incoming" score={selected.targetIncoming} />
+        </div>
+      </div>
+      <KeyValues title="Predicate counts" values={selected.predicateCounts} />
+      <KeyValues title="Predicate weights" values={selected.predicateSemanticWeights} />
       <KeyValues title="Semantic terms" values={selected.termCounts} />
       <div><p className="eyebrow mb-2">Evidence ({selected.evidence.length})</p>{selected.evidence.map((item, index) => <div key={`${item.segmentPath}-${index}`} className="mb-2 rounded border border-[#1d3731] bg-[#081411] p-2"><p className="break-all text-[9px] text-[#9ab2aa]">{item.segmentPath}</p><p className="mono mt-1 text-[8px] text-[#607d74]">offset {item.syncBlockOffset}</p></div>)}</div>
     </div>;
@@ -432,6 +477,50 @@ function Detail({ selected }: { selected: NodeDetail | InteractionDetail }) {
 
 function DetailMetric({ label, value }: { label: string; value: string }) {
   return <div className="rounded border border-[#1d3731] bg-[#081411] p-2"><p className="eyebrow">{label}</p><p className="mono mt-1 text-xs">{value}</p></div>;
+}
+
+function ReductionFlow({ window }: { window: SliceSummary }) {
+  const stages = [
+    ["Source interactions", window.reduction.sourceInteractionCount],
+    ["Pair candidates", window.reduction.candidateEdgeCount],
+    ["Backbone edges", window.reduction.retainedEdgeCount],
+  ] as const;
+  return <div className="grid grid-cols-3 gap-1">
+    {stages.map(([label, value], index) => <div key={label} className="relative rounded border border-[#1d3731] bg-[#081411] p-2">
+      <p className="mono text-xs font-semibold text-[#dcebe6]">{number(value)}</p>
+      <p className="mt-1 text-[8px] font-bold uppercase tracking-wider text-[#78958c]">{label}</p>
+      {index < stages.length - 1 && <span className="absolute -right-1 top-1/2 z-10 h-px w-2 bg-[#3c806a]" />}
+    </div>)}
+  </div>;
+}
+
+function ReductionBar({ label, retained, source }: { label: string; retained?: number | null; source?: number | null }) {
+  const percent = source != null && source > 0 && retained != null ? Math.min(100, (retained / source) * 100) : 0;
+  return <div>
+    <div className="mb-1.5 flex items-center justify-between gap-2 text-[9px]">
+      <span className="font-semibold text-[#9ab2aa]">{label}</span>
+      <span className="mono text-[#50e3a4]">{percentage(retained, source)}</span>
+    </div>
+    <div className="metric-bar"><span style={{ width: `${percent}%` }} /></div>
+  </div>;
+}
+
+function DirectionalScoreCard({ title, score }: { title: string; score: DirectionalDisparityScore }) {
+  const evaluated = score.significance != null;
+  return <div className={`rounded border p-3 ${score.isSignificant ? "border-[#2b6552] bg-[#102d24]" : "border-[#263d37] bg-[#081411]"}`}>
+    <div className="mb-3 flex items-start justify-between gap-2">
+      <div><p className="text-[11px] font-semibold text-[#cfe1db]">{title}</p><p className="mt-1 text-[9px] text-[#78958c]">{evaluated ? "Compared with local directed neighbors" : "Degree one direction is not evaluated"}</p></div>
+      <span className={`rounded border px-1.5 py-0.5 text-[8px] font-bold uppercase ${score.isSignificant ? "border-[#3c806a] bg-[#173e31] text-[#50e3a4]" : "border-[#2a413b] bg-[#101e1b] text-[#78958c]"}`}>
+        {score.isSignificant ? "Retained" : evaluated ? "Did not pass" : "Not evaluated"}
+      </span>
+    </div>
+    <div className="grid grid-cols-2 gap-2">
+      <DetailMetric label="Significance" value={probability(score.significance)} />
+      <DetailMetric label="Normalized weight" value={decimal(score.normalizedWeight, 4)} />
+      <DetailMetric label="Directed degree" value={number(score.degree)} />
+      <DetailMetric label="Directed strength" value={number(score.strength)} />
+    </div>
+  </div>;
 }
 
 function Distribution({ title, mean, p25, p75 }: { title: string; mean: number; p25: number; p75: number }) {

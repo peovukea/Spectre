@@ -1,3 +1,4 @@
+using Spectre.DisparityFiltering;
 using Spectre.SemanticIndexing;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -10,7 +11,8 @@ public sealed record RunStatusDto(
     RunState State,
     long ElapsedSeconds,
     bool IsPartial,
-    SemanticIndexingMetrics? IndexingMetrics);
+    SemanticIndexingMetrics? IndexingMetrics,
+    DisparityFilteringMetrics? FilteringMetrics);
 
 public sealed record FamilyInfoDto(
     int Id,
@@ -62,6 +64,7 @@ public sealed record SliceSummaryDto(
     IReadOnlyDictionary<string, int> NodeKindCounts,
     JaccardDistributionDto JaccardNodeKind,
     JaccardDistributionDto JaccardPreviousSelf,
+    DisparitySliceReduction Reduction,
     SliceRetentionLevel RetentionLevel);
 
 public sealed record ProjectedNodeDto(
@@ -69,14 +72,17 @@ public sealed record ProjectedNodeDto(
     double? JaccardNodeKind, double? JaccardPreviousSelf);
 
 public sealed record ProjectedEdgeDto(
-    string Source, string Target, string Predicate,
-    int Count, double SemanticWeight);
+    string Source, string Target,
+    int Count, double SemanticWeight,
+    IReadOnlyDictionary<string, int> PredicateCounts,
+    DirectionalDisparityScore SourceOutgoing,
+    DirectionalDisparityScore TargetIncoming);
 
 public sealed record GraphProjectionDto(
     IReadOnlyList<ProjectedNodeDto> Nodes,
     IReadOnlyList<ProjectedEdgeDto> Edges,
     bool Truncated,
-    int TotalMatchingInteractions,
+    int TotalMatchingEdges,
     int AppliedMaxNodes,
     int AppliedMaxEdges,
     SliceRetentionLevel RetentionLevel);
@@ -92,10 +98,14 @@ public sealed record EvidencePointerDto(
     long? TimestampNanos, string? EventId);
 
 public sealed record InteractionDetailDto(
-    string SourceId, string TargetId, string Predicate,
+    string SourceId, string TargetId,
     int Count, double SemanticWeight,
+    IReadOnlyDictionary<string, int> PredicateCounts,
+    IReadOnlyDictionary<string, double> PredicateSemanticWeights,
     IReadOnlyDictionary<string, int> TermCounts,
-    IReadOnlyList<EvidencePointerDto> Evidence);
+    IReadOnlyList<EvidencePointerDto> Evidence,
+    DirectionalDisparityScore SourceOutgoing,
+    DirectionalDisparityScore TargetIncoming);
 
 public sealed class LongAsStringJsonConverter : JsonConverter<long>
 {

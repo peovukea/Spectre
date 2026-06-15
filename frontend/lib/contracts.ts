@@ -20,6 +20,18 @@ export interface RunStatus {
   elapsedSeconds: number;
   isPartial: boolean;
   indexingMetrics: IndexingMetrics | null;
+  filteringMetrics: FilteringMetrics | null;
+}
+
+export interface FilteringMetrics {
+  sourceDocuments: number;
+  sourceInteractions: number;
+  candidateEdges: number;
+  retainedDocuments: number;
+  retainedEdges: number;
+  sourceSemanticWeight: number;
+  retainedSemanticWeight: number;
+  slicesEmitted: number;
 }
 
 export interface MemoryPressure {
@@ -71,7 +83,27 @@ export interface SliceSummary {
   nodeKindCounts: Record<string, number>;
   jaccardNodeKind: JaccardDistribution;
   jaccardPreviousSelf: JaccardDistribution;
+  reduction: DisparitySliceReduction;
   retentionLevel: RetentionLevel;
+}
+
+export interface DisparitySliceReduction {
+  alpha: number;
+  sourceDocumentCount: number;
+  sourceInteractionCount: number;
+  candidateEdgeCount: number;
+  retainedDocumentCount: number;
+  retainedEdgeCount: number;
+  sourceSemanticWeight: number;
+  retainedSemanticWeight: number;
+}
+
+export interface DirectionalDisparityScore {
+  degree: number;
+  strength: number;
+  normalizedWeight: number;
+  significance: number | null;
+  isSignificant: boolean;
 }
 
 export interface ProjectedNode {
@@ -85,16 +117,18 @@ export interface ProjectedNode {
 export interface ProjectedEdge {
   source: string;
   target: string;
-  predicate: string;
   count: number;
   semanticWeight: number;
+  predicateCounts: Record<string, number>;
+  sourceOutgoing: DirectionalDisparityScore;
+  targetIncoming: DirectionalDisparityScore;
 }
 
 export interface GraphProjection {
   nodes: ProjectedNode[];
   edges: ProjectedEdge[];
   truncated: boolean;
-  totalMatchingInteractions: number;
+  totalMatchingEdges: number;
   appliedMaxNodes: number;
   appliedMaxEdges: number;
   retentionLevel: RetentionLevel;
@@ -115,11 +149,14 @@ export interface EvidencePointer {
 export interface InteractionDetail {
   sourceId: string;
   targetId: string;
-  predicate: string;
   count: number;
   semanticWeight: number;
+  predicateCounts: Record<string, number>;
+  predicateSemanticWeights: Record<string, number>;
   termCounts: Record<string, number>;
   evidence: EvidencePointer[];
+  sourceOutgoing: DirectionalDisparityScore;
+  targetIncoming: DirectionalDisparityScore;
 }
 
 export interface GraphFilters {

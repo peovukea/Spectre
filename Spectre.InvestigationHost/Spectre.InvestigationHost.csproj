@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Spectre.CdmIngestion\Spectre.CdmIngestion.csproj" />
+    <ProjectReference Include="..\Spectre.DisparityFiltering\Spectre.DisparityFiltering.csproj" />
     <ProjectReference Include="..\Spectre.SemanticIndexing\Spectre.SemanticIndexing.csproj" />
   </ItemGroup>
 

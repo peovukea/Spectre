@@ -9,6 +9,8 @@ using Spectre.SemanticIndexing.Sinks;
 using Spectre.InvestigationHost.Store;
 using Spectre.SemanticIndexing;
 using Spectre.CdmIngestion;
+using Spectre.DisparityFiltering;
+using Spectre.DisparityFiltering.Sinks;
 
 namespace Spectre.InvestigationHost;
 
@@ -35,7 +37,16 @@ public sealed class IngestionBackgroundService : BackgroundService
     private void RunIngestion(CancellationToken ct)
     {
         var inputPath = _config.GetValue<string>("InputPath") ?? "d:\\Proj\\data\\cadets";
-        var options = new SemanticIndexingOptions(); // Defaults
+        var indexingOptions = new SemanticIndexingOptions();
+        var defaultFilteringOptions = new DisparityFilterOptions();
+        var filteringOptions = new DisparityFilterOptions
+        {
+            Alpha = _config.GetValue<double?>("DisparityFilter:Alpha") ?? defaultFilteringOptions.Alpha,
+            MaxEvidencePointersPerEdge = _config.GetValue<int?>("DisparityFilter:MaxEvidencePointersPerEdge")
+                ?? defaultFilteringOptions.MaxEvidencePointersPerEdge
+        };
+        SemanticIndexingGraphFactSink? indexingSink = null;
+        DisparityFilteringSemanticGraphSliceSink? filteringSink = null;
         
         _logger.LogInformation("Starting ingestion from {InputPath}", inputPath);
         _store.MarkRunState(RunState.Running);
@@ -52,7 +63,9 @@ public sealed class IngestionBackgroundService : BackgroundService
                 () => 
                 {
                     var sinkAdapter = new DashboardSliceSinkAdapter(_store);
-                    return new SemanticIndexingGraphFactSink(sinkAdapter, options);
+                    filteringSink = new DisparityFilteringSemanticGraphSliceSink(sinkAdapter, filteringOptions);
+                    indexingSink = new SemanticIndexingGraphFactSink(filteringSink, indexingOptions);
+                    return indexingSink;
                 },
                 ct);
 
@@ -71,7 +84,11 @@ public sealed class IngestionBackgroundService : BackgroundService
                 _logger.LogError(result.Exception, "Ingestion runner returned an exception.");
             }
             
-            _store.MarkRunState(finalState, isPartial: isPartial);
+            _store.MarkRunState(
+                finalState,
+                isPartial: isPartial,
+                indexingMetrics: indexingSink?.Metrics,
+                filteringMetrics: filteringSink?.Metrics);
             _logger.LogInformation("Ingestion finished with outcome {Outcome}.", result.Outcome);
         }
         catch (OperationCanceledException)

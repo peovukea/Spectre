@@ -1,16 +1,16 @@
-using Spectre.SemanticIndexing;
-using Spectre.SemanticIndexing.Sinks;
+using Spectre.DisparityFiltering;
+using Spectre.DisparityFiltering.Sinks;
 
 namespace Spectre.InvestigationHost.Store;
 
-public sealed class DashboardSliceSinkAdapter : ISemanticGraphSliceSink
+public sealed class DashboardSliceSinkAdapter : IDisparityGraphSliceSink
 {
     private readonly DashboardQueryStore _store;
     private int _disposed;
 
     public DashboardSliceSinkAdapter(DashboardQueryStore store) => _store = store;
 
-    public void Write(SemanticGraphSlice slice)
+    public void Write(DisparityGraphSlice slice)
     {
         if (Volatile.Read(ref _disposed) != 0) return; // Silent reject after dispose
         _store.AcceptSlice(slice);

@@ -19,6 +19,10 @@ a full graph, or implement disparity filtering. Closed windows are emitted and
 evicted as the event-time watermark advances. Disposing the indexing sink flushes
 remaining windows chronologically and disposes the owned slice sink.
 
+`Spectre.DisparityFiltering` consumes these closed slices as Layer 3, consolidates
+predicate interactions into directed source-target pair edges, and emits
+slice-bounded disparity backbones.
+
 ## Integration
 
 ```csharp

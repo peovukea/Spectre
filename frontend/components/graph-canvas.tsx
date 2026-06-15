@@ -188,7 +188,7 @@ export function GraphCanvas({ graph, loading, onNode, onEdge }: Props) {
       {graph && (
         <>
           <div className="pointer-events-none absolute left-3 top-3 rounded border border-[#285448] bg-[#07130fdd] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8eb5a9]">
-            {graph.nodes.length} nodes · {graph.edges.length} edges
+            {graph.nodes.length} nodes · {graph.edges.length} backbone edges
           </div>
           <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-lg border border-[#285448] bg-[#07130fee] shadow-lg">
             <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1.35)} className="grid h-9 w-9 place-items-center border-r border-[#285448] text-lg font-semibold text-[#9fc8ba] hover:bg-[#123329]">−</button>

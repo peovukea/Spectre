@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using Spectre.DisparityFiltering;
 using Spectre.SemanticIndexing;
 
 namespace Spectre.InvestigationHost.Store;
@@ -32,6 +33,7 @@ public sealed class DashboardQueryStore
     private RunState _runState = RunState.NotStarted;
     private bool _isPartial = false;
     private SemanticIndexingMetrics? _metricsSnapshot;
+    private DisparityFilteringMetrics? _filteringMetricsSnapshot;
     private readonly Stopwatch _runTimer = new();
 
     private long _estimatedDetailedBytes;
@@ -44,7 +46,11 @@ public sealed class DashboardQueryStore
         _eventHub = eventHub;
     }
 
-    public void MarkRunState(RunState state, bool isPartial = false, SemanticIndexingMetrics? metrics = null)
+    public void MarkRunState(
+        RunState state,
+        bool isPartial = false,
+        SemanticIndexingMetrics? indexingMetrics = null,
+        DisparityFilteringMetrics? filteringMetrics = null)
     {
         _lock.EnterWriteLock();
         try
@@ -56,7 +62,8 @@ public sealed class DashboardQueryStore
 
             _runState = state;
             _isPartial |= isPartial;
-            if (metrics != null) _metricsSnapshot = metrics;
+            if (indexingMetrics != null) _metricsSnapshot = indexingMetrics;
+            if (filteringMetrics != null) _filteringMetricsSnapshot = filteringMetrics;
             PublishRunStatus();
         }
         finally
@@ -70,7 +77,7 @@ public sealed class DashboardQueryStore
         // Handled by run state transition externally, but can trigger final flush
     }
 
-    public void AcceptSlice(SemanticGraphSlice slice)
+    public void AcceptSlice(DisparityGraphSlice slice)
     {
         SliceSummaryDto summary;
         long detailedBytes = EstimateDetailedBytes(slice);
@@ -80,7 +87,8 @@ public sealed class DashboardQueryStore
         _lock.EnterWriteLock();
         try
         {
-            _metricsSnapshot = slice.Metrics;
+            _metricsSnapshot = slice.IndexingMetrics;
+            _filteringMetricsSnapshot = slice.Metrics;
             
             // 1. Resolve family
             var basePath = slice.InputFamilyBasePath ?? "unknown";
@@ -97,7 +105,10 @@ public sealed class DashboardQueryStore
 
             // 2. Accumulate predicates and node kinds
             foreach (var doc in slice.Documents) _nodeKinds.Add(doc.NodeKind);
-            foreach (var inter in slice.Interactions) _predicates.Add(inter.Predicate);
+            foreach (var inter in slice.Interactions)
+            {
+                foreach (var predicate in inter.PredicateCounts.Keys) _predicates.Add(predicate);
+            }
 
             // 3. Evaluate limits and memory
             CheckEmergencyEviction(eventsToPublish);
@@ -232,7 +243,8 @@ public sealed class DashboardQueryStore
             _runState,
             (long)_runTimer.Elapsed.TotalSeconds,
             _isPartial,
-            _metricsSnapshot?.Snapshot()
+            _metricsSnapshot?.Snapshot(),
+            _filteringMetricsSnapshot?.Snapshot()
         ), JsonOptions)));
     }
 
@@ -241,7 +253,12 @@ public sealed class DashboardQueryStore
         _lock.EnterReadLock();
         try
         {
-            return new RunStatusDto(_runState, (long)_runTimer.Elapsed.TotalSeconds, _isPartial, _metricsSnapshot?.Snapshot());
+            return new RunStatusDto(
+                _runState,
+                (long)_runTimer.Elapsed.TotalSeconds,
+                _isPartial,
+                _metricsSnapshot?.Snapshot(),
+                _filteringMetricsSnapshot?.Snapshot());
         }
         finally
         {
@@ -295,7 +312,7 @@ public sealed class DashboardQueryStore
         bool isDefault = p.MinWeight == 0.0 && p.Predicate == null && p.NodeKind == null && 
                          p.MaxNodes == DefaultMaxNodes && p.MaxEdges == DefaultMaxEdges;
 
-        SemanticGraphSlice? detailedSlice = null;
+        DisparityGraphSlice? detailedSlice = null;
 
         _lock.EnterReadLock();
         try
@@ -312,7 +329,7 @@ public sealed class DashboardQueryStore
                 var proj = _projections.FirstOrDefault(x => x.FamilyId == familyId && x.WindowStartNanos == windowStart);
                 if (proj != null)
                 {
-                    return new GraphProjectionDto(proj.Nodes, proj.Edges, proj.Truncated, proj.TotalMatchingInteractions, DefaultMaxNodes, DefaultMaxEdges, SliceRetentionLevel.Projection);
+                    return new GraphProjectionDto(proj.Nodes, proj.Edges, proj.Truncated, proj.TotalMatchingEdges, DefaultMaxNodes, DefaultMaxEdges, SliceRetentionLevel.Projection);
                 }
             }
 
@@ -342,7 +359,7 @@ public sealed class DashboardQueryStore
 
     public NodeDetailDto? GetNodeDetail(int familyId, long windowStart, Guid nodeId)
     {
-        SemanticGraphSlice? detailedSlice = null;
+        DisparityGraphSlice? detailedSlice = null;
         _lock.EnterReadLock();
         try
         {
@@ -365,9 +382,9 @@ public sealed class DashboardQueryStore
             new Dictionary<string, double>(doc.TfidfWeights));
     }
 
-    public InteractionDetailDto? GetInteractionDetail(int familyId, long windowStart, Guid source, Guid target, string predicate)
+    public InteractionDetailDto? GetInteractionDetail(int familyId, long windowStart, Guid source, Guid target)
     {
-        SemanticGraphSlice? detailedSlice = null;
+        DisparityGraphSlice? detailedSlice = null;
         _lock.EnterReadLock();
         try
         {
@@ -380,23 +397,27 @@ public sealed class DashboardQueryStore
 
         if (detailedSlice == null) throw new InvalidOperationException("410 Gone");
 
-        var inter = detailedSlice.Interactions.FirstOrDefault(i => i.SourceNodeId == source && i.TargetNodeId == target && i.Predicate == predicate);
+        var inter = detailedSlice.Interactions.FirstOrDefault(i => i.SourceNodeId == source && i.TargetNodeId == target);
         if (inter == null) return null;
 
         return new InteractionDetailDto(
-            inter.SourceNodeId.ToString("D"), inter.TargetNodeId.ToString("D"), inter.Predicate,
+            inter.SourceNodeId.ToString("D"), inter.TargetNodeId.ToString("D"),
             inter.Count, inter.SemanticWeight,
+            new Dictionary<string, int>(inter.PredicateCounts),
+            new Dictionary<string, double>(inter.PredicateSemanticWeights),
             new Dictionary<string, int>(inter.TermCounts),
-            inter.Evidence.Select(e => new EvidencePointerDto(e.Source.SegmentPath, e.Source.SyncBlockOffset, e.TimestampNanos, e.EventId?.ToString("D"))).ToList());
+            inter.Evidence.Select(e => new EvidencePointerDto(e.Source.SegmentPath, e.Source.SyncBlockOffset, e.TimestampNanos, e.EventId?.ToString("D"))).ToList(),
+            inter.SourceOutgoing,
+            inter.TargetIncoming);
     }
 
-    private static GraphProjectionDto BuildProjectionFromSlice(SemanticGraphSlice slice, GraphQueryParameters p)
+    private static GraphProjectionDto BuildProjectionFromSlice(DisparityGraphSlice slice, GraphQueryParameters p)
     {
         // 1. Filter
         var filtered = slice.Interactions.Where(i => i.SemanticWeight >= p.MinWeight);
         if (p.Predicate != null)
         {
-            filtered = filtered.Where(i => i.Predicate == p.Predicate);
+            filtered = filtered.Where(i => i.PredicateCounts.ContainsKey(p.Predicate));
         }
 
         var docKinds = slice.Documents.ToDictionary(d => d.NodeId, d => d.NodeKind);
@@ -412,7 +433,6 @@ public sealed class DashboardQueryStore
         var sorted = filtered.OrderByDescending(i => i.SemanticWeight)
             .ThenBy(i => i.SourceNodeId)
             .ThenBy(i => i.TargetNodeId)
-            .ThenBy(i => i.Predicate)
             .ToList();
 
         // 3. Walk and bound
@@ -432,7 +452,10 @@ public sealed class DashboardQueryStore
                 acceptedNodeIds.Add(inter.TargetNodeId);
                 acceptedEdges.Add(new ProjectedEdgeDto(
                     inter.SourceNodeId.ToString("D"), inter.TargetNodeId.ToString("D"),
-                    inter.Predicate, inter.Count, inter.SemanticWeight));
+                    inter.Count, inter.SemanticWeight,
+                    new Dictionary<string, int>(inter.PredicateCounts),
+                    inter.SourceOutgoing,
+                    inter.TargetIncoming));
             }
             else
             {
@@ -450,16 +473,19 @@ public sealed class DashboardQueryStore
         return new GraphProjectionDto(acceptedNodes, acceptedEdges, truncated, sorted.Count, p.MaxNodes, p.MaxEdges, SliceRetentionLevel.Detailed);
     }
 
-    private BoundedProjection BuildDefaultProjection(int familyId, SemanticGraphSlice slice, long bytes)
+    private BoundedProjection BuildDefaultProjection(int familyId, DisparityGraphSlice slice, long bytes)
     {
         var proj = BuildProjectionFromSlice(slice, new GraphQueryParameters { MaxNodes = DefaultMaxNodes, MaxEdges = DefaultMaxEdges });
-        return new BoundedProjection(familyId, slice.WindowStartNanos, proj.Nodes, proj.Edges, proj.Truncated, proj.TotalMatchingInteractions, bytes);
+        return new BoundedProjection(familyId, slice.WindowStartNanos, proj.Nodes, proj.Edges, proj.Truncated, proj.TotalMatchingEdges, bytes);
     }
 
-    private static SliceSummaryDto BuildSummary(int familyId, string familyKey, string familyName, SemanticGraphSlice slice, SliceRetentionLevel level)
+    private static SliceSummaryDto BuildSummary(int familyId, string familyKey, string familyName, DisparityGraphSlice slice, SliceRetentionLevel level)
     {
         var docCounts = slice.Documents.GroupBy(d => d.NodeKind).ToDictionary(g => g.Key, g => g.Count());
-        var predCounts = slice.Interactions.GroupBy(i => i.Predicate).ToDictionary(g => g.Key, g => g.Count());
+        var predCounts = slice.Interactions
+            .SelectMany(interaction => interaction.PredicateCounts)
+            .GroupBy(pair => pair.Key, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.Sum(pair => pair.Value), StringComparer.Ordinal);
         
         return new SliceSummaryDto(
             familyId, familyKey, familyName,
@@ -471,6 +497,7 @@ public sealed class DashboardQueryStore
             predCounts, docCounts,
             BuildJaccard(slice.Documents.Select(d => d.JaccardToNodeKindBaseline)),
             BuildJaccard(slice.Documents.Select(d => d.JaccardToPreviousSelf)),
+            slice.Reduction,
             level);
     }
 
@@ -487,7 +514,7 @@ public sealed class DashboardQueryStore
         );
     }
 
-    private static long EstimateDetailedBytes(SemanticGraphSlice slice)
+    private static long EstimateDetailedBytes(DisparityGraphSlice slice)
     {
         long bytes = 0;
         foreach (var doc in slice.Documents)
@@ -500,7 +527,8 @@ public sealed class DashboardQueryStore
         foreach (var inter in slice.Interactions)
         {
             bytes += 100;
-            bytes += 24 + inter.Predicate.Length * 2;
+            bytes += inter.PredicateCounts.Count * 96;
+            bytes += inter.PredicateSemanticWeights.Count * 104;
             bytes += inter.TermCounts.Count * 80;
             foreach (var ev in inter.Evidence)
             {
@@ -510,7 +538,7 @@ public sealed class DashboardQueryStore
         return bytes;
     }
 
-    private static long EstimateProjectionBytes(SemanticGraphSlice slice)
+    private static long EstimateProjectionBytes(DisparityGraphSlice slice)
     {
         // simplistic bound for projection, it's typically capped anyway
         return 250 * 100 + 500 * 150;
@@ -522,6 +550,6 @@ public sealed class DashboardQueryStore
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
-    private sealed record DetailedSliceEntry(int FamilyId, long WindowStartNanos, SemanticGraphSlice Slice, long EstimatedBytes);
-    private sealed record BoundedProjection(int FamilyId, long WindowStartNanos, IReadOnlyList<ProjectedNodeDto> Nodes, IReadOnlyList<ProjectedEdgeDto> Edges, bool Truncated, int TotalMatchingInteractions, long EstimatedBytes);
+    private sealed record DetailedSliceEntry(int FamilyId, long WindowStartNanos, DisparityGraphSlice Slice, long EstimatedBytes);
+    private sealed record BoundedProjection(int FamilyId, long WindowStartNanos, IReadOnlyList<ProjectedNodeDto> Nodes, IReadOnlyList<ProjectedEdgeDto> Edges, bool Truncated, int TotalMatchingEdges, long EstimatedBytes);
 }

@@ -131,11 +131,11 @@ app.MapGet("/api/families/{familyId:int}/windows/{windowStart:long}/nodes/{nodeI
     }
 });
 
-app.MapGet("/api/families/{familyId:int}/windows/{windowStart:long}/interactions/{source:guid}/{target:guid}/{predicate}", (int familyId, long windowStart, Guid source, Guid target, string predicate, DashboardQueryStore store) =>
+app.MapGet("/api/families/{familyId:int}/windows/{windowStart:long}/interactions/{source:guid}/{target:guid}", (int familyId, long windowStart, Guid source, Guid target, DashboardQueryStore store) =>
 {
     try
     {
-        var inter = store.GetInteractionDetail(familyId, windowStart, source, target, predicate);
+        var inter = store.GetInteractionDetail(familyId, windowStart, source, target);
         return inter != null ? Results.Ok(inter) : Results.NotFound();
     }
     catch (InvalidOperationException ex) when (ex.Message == "410 Gone")

@@ -42,9 +42,9 @@ export const api = {
   },
   node: (familyId: number, windowStart: string, nodeId: string) =>
     get<NodeDetail>(`/families/${familyId}/windows/${windowStart}/nodes/${nodeId}`),
-  interaction: (familyId: number, windowStart: string, source: string, target: string, predicate: string) =>
+  interaction: (familyId: number, windowStart: string, source: string, target: string) =>
     get<InteractionDetail>(
-      `/families/${familyId}/windows/${windowStart}/interactions/${source}/${target}/${encodeURIComponent(predicate)}`,
+      `/families/${familyId}/windows/${windowStart}/interactions/${source}/${target}`,
     ),
   eventsUrl: `${API}/events`,
 };
