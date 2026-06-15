@@ -87,42 +87,136 @@ public sealed record SemanticGraphSlice
 /// <summary>Cumulative counters and UTC timestamps for one semantic indexing run.</summary>
 public sealed class SemanticIndexingMetrics
 {
-    /// <summary>Gets the number of graph facts read.</summary>
-    public long FactsRead { get; internal set; }
-    /// <summary>Gets the number of edge facts read.</summary>
-    public long EdgeFactsRead { get; internal set; }
-    /// <summary>Gets the number of attribute facts read.</summary>
-    public long AttributeFactsRead { get; internal set; }
-    /// <summary>Gets the number of active documents created.</summary>
-    public long DocumentsCreated { get; internal set; }
-    /// <summary>Gets the number of documents emitted in closed slices.</summary>
-    public long DocumentsClosed { get; internal set; }
-    /// <summary>Gets the number of active interactions created.</summary>
-    public long InteractionsCreated { get; internal set; }
-    /// <summary>Gets the number of interactions emitted in closed slices.</summary>
-    public long InteractionsClosed { get; internal set; }
-    /// <summary>Gets the number of timestamp-less edges skipped.</summary>
-    public long FactsSkippedWithoutTimestamp { get; internal set; }
-    /// <summary>Gets the number of facts skipped because their window was already emitted.</summary>
-    public long LateFactsSkipped { get; internal set; }
-    /// <summary>Gets the maximum event lateness among facts skipped as late.</summary>
-    public long LateFactLatenessMaxNanos { get; internal set; }
-    /// <summary>Gets the one-minute upper-bound estimate of median skipped-fact lateness.</summary>
-    public long LateFactLatenessP50Nanos { get; internal set; }
-    /// <summary>Gets the one-minute upper-bound estimate of P95 skipped-fact lateness.</summary>
-    public long LateFactLatenessP95Nanos { get; internal set; }
-    /// <summary>Gets the one-minute upper-bound estimate of P99 skipped-fact lateness.</summary>
-    public long LateFactLatenessP99Nanos { get; internal set; }
-    /// <summary>Gets the number of slices emitted.</summary>
-    public long SlicesEmitted { get; internal set; }
-    /// <summary>Gets the number of missing endpoint-kind lookups.</summary>
-    public long UnknownNodeKindUses { get; internal set; }
-    /// <summary>Gets the UTC time processing started.</summary>
-    public DateTimeOffset ProcessingStartedAt { get; internal set; }
-    /// <summary>Gets the UTC time successful disposal completed.</summary>
-    public DateTimeOffset? ProcessingEndedAt { get; internal set; }
+    private long _factsRead;
+    private long _edgeFactsRead;
+    private long _attributeFactsRead;
+    private long _documentsCreated;
+    private long _documentsClosed;
+    private long _interactionsCreated;
+    private long _interactionsClosed;
+    private long _factsSkippedWithoutTimestamp;
+    private long _lateFactsSkipped;
+    private long _lateFactLatenessMaxNanos;
+    private long _lateFactLatenessP50Nanos;
+    private long _lateFactLatenessP95Nanos;
+    private long _lateFactLatenessP99Nanos;
+    private long _slicesEmitted;
+    private long _unknownNodeKindUses;
+    private long _processingStartedAtTicks;
+    private long _processingEndedAtTicks; // 0 means null
 
-    internal SemanticIndexingMetrics Snapshot() => new()
+    /// <summary>Gets the number of graph facts read.</summary>
+    public long FactsRead
+    {
+        get => Interlocked.Read(ref _factsRead);
+        internal set => Interlocked.Exchange(ref _factsRead, value);
+    }
+    /// <summary>Gets the number of edge facts read.</summary>
+    public long EdgeFactsRead
+    {
+        get => Interlocked.Read(ref _edgeFactsRead);
+        internal set => Interlocked.Exchange(ref _edgeFactsRead, value);
+    }
+    /// <summary>Gets the number of attribute facts read.</summary>
+    public long AttributeFactsRead
+    {
+        get => Interlocked.Read(ref _attributeFactsRead);
+        internal set => Interlocked.Exchange(ref _attributeFactsRead, value);
+    }
+    /// <summary>Gets the number of active documents created.</summary>
+    public long DocumentsCreated
+    {
+        get => Interlocked.Read(ref _documentsCreated);
+        internal set => Interlocked.Exchange(ref _documentsCreated, value);
+    }
+    /// <summary>Gets the number of documents emitted in closed slices.</summary>
+    public long DocumentsClosed
+    {
+        get => Interlocked.Read(ref _documentsClosed);
+        internal set => Interlocked.Exchange(ref _documentsClosed, value);
+    }
+    /// <summary>Gets the number of active interactions created.</summary>
+    public long InteractionsCreated
+    {
+        get => Interlocked.Read(ref _interactionsCreated);
+        internal set => Interlocked.Exchange(ref _interactionsCreated, value);
+    }
+    /// <summary>Gets the number of interactions emitted in closed slices.</summary>
+    public long InteractionsClosed
+    {
+        get => Interlocked.Read(ref _interactionsClosed);
+        internal set => Interlocked.Exchange(ref _interactionsClosed, value);
+    }
+    /// <summary>Gets the number of timestamp-less edges skipped.</summary>
+    public long FactsSkippedWithoutTimestamp
+    {
+        get => Interlocked.Read(ref _factsSkippedWithoutTimestamp);
+        internal set => Interlocked.Exchange(ref _factsSkippedWithoutTimestamp, value);
+    }
+    /// <summary>Gets the number of facts skipped because their window was already emitted.</summary>
+    public long LateFactsSkipped
+    {
+        get => Interlocked.Read(ref _lateFactsSkipped);
+        internal set => Interlocked.Exchange(ref _lateFactsSkipped, value);
+    }
+    /// <summary>Gets the maximum event lateness among facts skipped as late.</summary>
+    public long LateFactLatenessMaxNanos
+    {
+        get => Interlocked.Read(ref _lateFactLatenessMaxNanos);
+        internal set => Interlocked.Exchange(ref _lateFactLatenessMaxNanos, value);
+    }
+    /// <summary>Gets the one-minute upper-bound estimate of median skipped-fact lateness.</summary>
+    public long LateFactLatenessP50Nanos
+    {
+        get => Interlocked.Read(ref _lateFactLatenessP50Nanos);
+        internal set => Interlocked.Exchange(ref _lateFactLatenessP50Nanos, value);
+    }
+    /// <summary>Gets the one-minute upper-bound estimate of P95 skipped-fact lateness.</summary>
+    public long LateFactLatenessP95Nanos
+    {
+        get => Interlocked.Read(ref _lateFactLatenessP95Nanos);
+        internal set => Interlocked.Exchange(ref _lateFactLatenessP95Nanos, value);
+    }
+    /// <summary>Gets the one-minute upper-bound estimate of P99 skipped-fact lateness.</summary>
+    public long LateFactLatenessP99Nanos
+    {
+        get => Interlocked.Read(ref _lateFactLatenessP99Nanos);
+        internal set => Interlocked.Exchange(ref _lateFactLatenessP99Nanos, value);
+    }
+    /// <summary>Gets the number of slices emitted.</summary>
+    public long SlicesEmitted
+    {
+        get => Interlocked.Read(ref _slicesEmitted);
+        internal set => Interlocked.Exchange(ref _slicesEmitted, value);
+    }
+    /// <summary>Gets the number of missing endpoint-kind lookups.</summary>
+    public long UnknownNodeKindUses
+    {
+        get => Interlocked.Read(ref _unknownNodeKindUses);
+        internal set => Interlocked.Exchange(ref _unknownNodeKindUses, value);
+    }
+    /// <summary>Gets the UTC time processing started.</summary>
+    public DateTimeOffset ProcessingStartedAt
+    {
+        get => new DateTimeOffset(Interlocked.Read(ref _processingStartedAtTicks), TimeSpan.Zero);
+        internal set => Interlocked.Exchange(ref _processingStartedAtTicks, value.UtcTicks);
+    }
+    /// <summary>Gets the UTC time successful disposal completed.</summary>
+    public DateTimeOffset? ProcessingEndedAt
+    {
+        get
+        {
+            var ticks = Interlocked.Read(ref _processingEndedAtTicks);
+            return ticks == 0 ? null : new DateTimeOffset(ticks, TimeSpan.Zero);
+        }
+        internal set
+        {
+            Interlocked.Exchange(ref _processingEndedAtTicks, value?.UtcTicks ?? 0);
+        }
+    }
+
+    /// <summary>Creates a thread-safe point-in-time snapshot of these metrics.</summary>
+    public SemanticIndexingMetrics Snapshot() => new()
     {
         FactsRead = FactsRead,
         EdgeFactsRead = EdgeFactsRead,

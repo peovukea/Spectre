@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #07100f;
+  --panel: #0b1715;
+  --panel-strong: #0e1e1b;
+  --line: #1d3731;
+  --line-soft: #142a26;
+  --text: #dcebe6;
+  --muted: #78958c;
+  --green: #50e3a4;
+  --green-soft: #173e31;
+  --amber: #f5b95f;
+  --red: #ff7a72;
+  --blue: #66b8ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at 18% -10%, rgba(59, 170, 127, 0.12), transparent 30rem),
+    var(--bg);
+  color: var(--text);
+  font-family: "Segoe UI", Inter, system-ui, sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #23443c;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mono {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(14, 30, 27, 0.96), rgba(8, 20, 18, 0.96));
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22);
+}
+
+.eyebrow {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.control {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #091613;
+  color: var(--text);
+  outline: none;
+  padding: 8px 10px;
+  transition: border-color 120ms ease;
+}
+
+.control:focus {
+  border-color: #3e806b;
+}
+
+.control:disabled {
+  color: #526b64;
+  cursor: not-allowed;
+}
+
+.metric-bar {
+  height: 3px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #173129;
+}
+
+.metric-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+}
