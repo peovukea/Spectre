@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Spectre Investigation Frontend
 
-## Getting Started
+This is the Next.js investigation UI for the in-memory
+`Spectre.InvestigationHost` API. It renders run status, memory pressure, family
+windows, retained graph projections, and node/interaction detail for the live
+disparity-filtered backbone.
 
-First, run the development server:
+## Run Locally
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Start the API:
+
+```powershell
+dotnet run --project ..\Spectre.InvestigationHost --configuration Release -- `
+  --InputPath d:\Proj\data\cadets
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Start the frontend:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open `http://localhost:3000/investigate`.
 
-## Learn More
+## Scripts
 
-To learn more about Next.js, take a look at the following resources:
+```powershell
+npm run lint
+npm run build
+npm run start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`npm run build` runs the production Next.js build and TypeScript check.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Contract Notes
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- The backend streams live updates from `GET /api/events` using Server-Sent
+  Events. Clients reconcile reconnects by refetching status, memory, families,
+  and windows; the stream does not replay old events.
+- Graph windows can return `410 Gone` when their detailed slice or default
+  projection has been evicted by bounded retention.
+- Unknown windows and unknown detail records return `404`.
+- All backend `Int64` fields are JSON strings. Use the `Int64String` type in
+  `lib/contracts.ts` and parse only at display boundaries.
+- Valid graph query limits are `minWeight >= 0`, `maxNodes` in `2..1000`, and
+  `maxEdges` in `1..2000`.

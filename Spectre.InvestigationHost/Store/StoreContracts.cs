@@ -18,8 +18,8 @@ public sealed record FamilyInfoDto(
     int Id,
     string Key,
     string Name,
-    [property: JsonConverter(typeof(LongAsStringJsonConverter))] long FirstWindowStartNanos,
-    [property: JsonConverter(typeof(LongAsStringJsonConverter))] long LastWindowStartNanos);
+    long FirstWindowStartNanos,
+    long LastWindowStartNanos);
 
 public sealed record StoreMemoryPressureDto(
     int RetainedDetailedSlices,
@@ -42,6 +42,15 @@ public sealed record GraphQueryParameters(
     string? Predicate = null,
     string? NodeKind = null);
 
+public enum StoreQueryStatus { Found, NotFound, Gone }
+
+public sealed record StoreQueryResult<T>(StoreQueryStatus Status, T? Value)
+{
+    public static StoreQueryResult<T> Found(T value) => new(StoreQueryStatus.Found, value);
+    public static StoreQueryResult<T> NotFound() => new(StoreQueryStatus.NotFound, default);
+    public static StoreQueryResult<T> Gone() => new(StoreQueryStatus.Gone, default);
+}
+
 public enum SliceRetentionLevel { Summary, Projection, Detailed }
 
 public sealed record JaccardDistributionDto(
@@ -53,8 +62,8 @@ public sealed record SliceSummaryDto(
     int FamilyId,
     string FamilyKey,
     string FamilyName,
-    [property: JsonConverter(typeof(LongAsStringJsonConverter))] long WindowStartNanos,
-    [property: JsonConverter(typeof(LongAsStringJsonConverter))] long WindowEndNanos,
+    long WindowStartNanos,
+    long WindowEndNanos,
     string WindowStartIso,
     int DocumentCount,
     int InteractionCount,

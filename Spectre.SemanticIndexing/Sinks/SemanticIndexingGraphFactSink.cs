@@ -78,7 +78,7 @@ public sealed class SemanticIndexingGraphFactSink : IGraphFactFamilySink
         }
 
         _currentFamilyBasePath = familyBasePath;
-        ResetFamilyWatermark();
+        ResetFamilyState();
     }
 
     /// <inheritdoc />
@@ -94,7 +94,7 @@ public sealed class SemanticIndexingGraphFactSink : IGraphFactFamilySink
 
         FlushOpenWindows();
         _currentFamilyBasePath = null;
-        ResetFamilyWatermark();
+        ResetFamilyState();
     }
 
     /// <inheritdoc />
@@ -435,8 +435,13 @@ public sealed class SemanticIndexingGraphFactSink : IGraphFactFamilySink
         }
     }
 
-    private void ResetFamilyWatermark()
+    private void ResetFamilyState()
     {
+        _metadata.Clear();
+        _documentFrequency.Clear();
+        _nodeKindBaselines.Clear();
+        _previousSelf.Clear();
+        _documentCount = 0;
         _maxSeenTimestampNanos = null;
         _closedThroughNanos = long.MinValue;
     }

@@ -4,17 +4,24 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Spectre.InvestigationHost;
 using Spectre.InvestigationHost.Store;
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
 
 builder.Services.AddSingleton<EventHub>();
 builder.Services.AddSingleton<DashboardQueryStore>();
 builder.Services.AddHostedService<IngestionBackgroundService>();
 builder.Services.AddCors(opts => opts.AddDefaultPolicy(p => p.WithOrigins("http://localhost:3000").AllowAnyHeader().AllowAnyMethod()));
 builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+{
+    options.SerializerOptions.Converters.Add(new LongAsStringJsonConverter());
+    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
+});
 
 var app = builder.Build();
 
@@ -35,32 +42,40 @@ app.MapGet("/api/events", async (HttpContext ctx, EventHub hub, CancellationToke
     ctx.Response.Headers.CacheControl = "no-cache";
     ctx.Response.Headers["X-Accel-Buffering"] = "no";
     
-    var lastEventId = ctx.Request.Headers["Last-Event-ID"].ToString();
-    // If there's a last event ID, we don't replay, the client must fetch /api/status 
-    // to reconcile. But we still subscribe them to new events.
+    _ = ctx.Request.Headers["Last-Event-ID"].ToString();
 
-    int eventId = 0;
-    
-    // Heartbeat loop
-    _ = Task.Run(async () =>
+    var stream = hub.Subscribe(ct);
+    await using var enumerator = stream.GetAsyncEnumerator(ct);
+    using var heartbeat = new PeriodicTimer(TimeSpan.FromSeconds(15));
+
+    var moveNext = enumerator.MoveNextAsync().AsTask();
+    var nextHeartbeat = heartbeat.WaitForNextTickAsync(ct).AsTask();
+
+    while (!ct.IsCancellationRequested)
     {
-        while (!ct.IsCancellationRequested)
+        var completed = await Task.WhenAny(moveNext, nextHeartbeat);
+        if (completed == nextHeartbeat)
         {
-            await Task.Delay(TimeSpan.FromSeconds(15), ct);
-            try
+            if (!await nextHeartbeat)
             {
-                await ctx.Response.WriteAsync($": heartbeat\n\n", ct);
-                await ctx.Response.Body.FlushAsync(ct);
+                break;
             }
-            catch { break; }
-        }
-    }, ct);
 
-    await foreach (var sse in hub.Subscribe(ct))
-    {
-        eventId++;
-        await ctx.Response.WriteAsync($"id: {eventId}\nevent: {sse.EventType}\ndata: {sse.Data}\n\n", ct);
+            await ctx.Response.WriteAsync(": heartbeat\n\n", ct);
+            await ctx.Response.Body.FlushAsync(ct);
+            nextHeartbeat = heartbeat.WaitForNextTickAsync(ct).AsTask();
+            continue;
+        }
+
+        if (!await moveNext)
+        {
+            break;
+        }
+
+        var sse = enumerator.Current;
+        await ctx.Response.WriteAsync($"id: {sse.Id}\nevent: {sse.EventType}\ndata: {sse.Data}\n\n", ct);
         await ctx.Response.Body.FlushAsync(ct);
+        moveNext = enumerator.MoveNextAsync().AsTask();
     }
 });
 
@@ -107,41 +122,39 @@ app.MapGet("/api/families/{familyId:int}/windows/{windowStart:long}/graph", (int
         predicate,
         nodeKind);
 
-    try
+    var validation = ValidateGraphQuery(p, store);
+    if (validation is not null)
     {
-        var proj = store.GetProjection(familyId, windowStart, p);
-        return proj != null ? Results.Ok(proj) : Results.NotFound();
+        return validation;
     }
-    catch (InvalidOperationException ex) when (ex.Message == "410 Gone")
-    {
-        return Results.StatusCode(410);
-    }
+
+    return ToResult(store.GetProjection(familyId, windowStart, p));
 });
 
 app.MapGet("/api/families/{familyId:int}/windows/{windowStart:long}/nodes/{nodeId:guid}", (int familyId, long windowStart, Guid nodeId, DashboardQueryStore store) =>
-{
-    try
-    {
-        var node = store.GetNodeDetail(familyId, windowStart, nodeId);
-        return node != null ? Results.Ok(node) : Results.NotFound();
-    }
-    catch (InvalidOperationException ex) when (ex.Message == "410 Gone")
-    {
-        return Results.StatusCode(410);
-    }
-});
+    ToResult(store.GetNodeDetail(familyId, windowStart, nodeId)));
 
 app.MapGet("/api/families/{familyId:int}/windows/{windowStart:long}/interactions/{source:guid}/{target:guid}", (int familyId, long windowStart, Guid source, Guid target, DashboardQueryStore store) =>
+    ToResult(store.GetInteractionDetail(familyId, windowStart, source, target)));
+
+static IResult? ValidateGraphQuery(GraphQueryParameters parameters, DashboardQueryStore store)
 {
-    try
+    var validation = GraphQueryValidator.Validate(parameters, store.GetPredicates(), store.GetNodeKinds());
+    if (!validation.IsValid)
     {
-        var inter = store.GetInteractionDetail(familyId, windowStart, source, target);
-        return inter != null ? Results.Ok(inter) : Results.NotFound();
+        return Results.BadRequest(new { error = validation.Error });
     }
-    catch (InvalidOperationException ex) when (ex.Message == "410 Gone")
+
+    return null;
+}
+
+static IResult ToResult<T>(StoreQueryResult<T> result) =>
+    result.Status switch
     {
-        return Results.StatusCode(410);
-    }
-});
+        StoreQueryStatus.Found => Results.Ok(result.Value),
+        StoreQueryStatus.NotFound => Results.NotFound(),
+        StoreQueryStatus.Gone => Results.StatusCode(StatusCodes.Status410Gone),
+        _ => Results.StatusCode(StatusCodes.Status500InternalServerError)
+    };
 
 app.Run();

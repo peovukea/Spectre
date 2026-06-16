@@ -175,6 +175,77 @@ public sealed class SemanticIndexingGraphFactSinkTests
     }
 
     [Fact]
+    public void FamilyLifecycle_DoesNotCarryMetadataIntoLaterFamilies()
+    {
+        var output = new CollectingSliceSink();
+        var source = Guid.NewGuid();
+        var target = Guid.NewGuid();
+        using var sink = Fact.Indexer(output);
+
+        sink.BeginFamily("first.bin");
+        sink.Write(Fact.Attribute(target, "HAS_NODE_KIND", "FILE"));
+        sink.Write(Fact.Attribute(target, "HAS_PATH", "/var/log/first.log"));
+        sink.Write(Fact.Edge(source, target, 100));
+        sink.EndFamily("first.bin");
+
+        sink.BeginFamily("second.bin");
+        sink.Write(Fact.Edge(source, target, 100));
+        sink.EndFamily("second.bin");
+
+        var secondSourceDocument = output.Slices.Single(slice => slice.InputFamilyBasePath == "second.bin")
+            .Documents.Single(document => document.NodeId == source);
+        Assert.Contains("OUT:EVENT_READ:TO_KIND:UNKNOWN", secondSourceDocument.TermCounts.Keys);
+        Assert.DoesNotContain(secondSourceDocument.TermCounts.Keys, term => term.Contains("FILE", StringComparison.Ordinal));
+        Assert.DoesNotContain(secondSourceDocument.TermCounts.Keys, term => term.Contains("/VAR/*", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FamilyLifecycle_DoesNotCarryJaccardBaselinesIntoLaterFamilies()
+    {
+        var output = new CollectingSliceSink();
+        var node = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        using var sink = Fact.Indexer(output);
+
+        sink.BeginFamily("first.bin");
+        sink.Write(Fact.Attribute(node, "HAS_NODE_KIND", "PROCESS"));
+        sink.Write(Fact.Edge(node, Guid.NewGuid(), 100, "EVENT_READ"));
+        sink.EndFamily("first.bin");
+
+        sink.BeginFamily("second.bin");
+        sink.Write(Fact.Attribute(node, "HAS_NODE_KIND", "PROCESS"));
+        sink.Write(Fact.Attribute(other, "HAS_NODE_KIND", "PROCESS"));
+        sink.Write(Fact.Edge(node, Guid.NewGuid(), 100, "EVENT_READ"));
+        sink.Write(Fact.Edge(other, Guid.NewGuid(), 100, "EVENT_READ"));
+        sink.EndFamily("second.bin");
+
+        var secondNodeDocument = output.Slices.Single(slice => slice.InputFamilyBasePath == "second.bin")
+            .Documents.Single(document => document.NodeId == node);
+        Assert.Null(secondNodeDocument.JaccardToPreviousSelf);
+        Assert.Null(secondNodeDocument.JaccardToNodeKindBaseline);
+    }
+
+    [Fact]
+    public void FamilyLifecycle_DoesNotCarryDocumentFrequencyIntoLaterFamilies()
+    {
+        var output = new CollectingSliceSink();
+        using var sink = Fact.Indexer(output);
+
+        sink.BeginFamily("first.bin");
+        sink.Write(Fact.Edge(Guid.NewGuid(), Guid.NewGuid(), 100));
+        sink.EndFamily("first.bin");
+
+        var secondSource = Guid.NewGuid();
+        sink.BeginFamily("second.bin");
+        sink.Write(Fact.Edge(secondSource, Guid.NewGuid(), 100));
+        sink.EndFamily("second.bin");
+
+        var secondSourceDocument = output.Slices.Single(slice => slice.InputFamilyBasePath == "second.bin")
+            .Documents.Single(document => document.NodeId == secondSource);
+        Assert.Equal(Math.Log(3d / 2d) + 1, secondSourceDocument.TfidfWeights["OUT:EVENT_READ"], 10);
+    }
+
+    [Fact]
     public void FamilyLifecycle_RequiresMatchingNonOverlappingFamilies()
     {
         var output = new CollectingSliceSink();

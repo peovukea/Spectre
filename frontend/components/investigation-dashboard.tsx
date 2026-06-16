@@ -27,19 +27,29 @@ const DEFAULT_FILTERS: GraphFilters = {
 };
 const VISIBLE_WINDOW_COUNT = 5;
 
-function number(value?: number | null) {
-  if (value == null) return "-";
-  return new Intl.NumberFormat("en", { notation: value >= 1_000_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(value);
+function asNumber(value?: number | string | null) {
+  if (value == null || value === "") return null;
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
-function decimal(value?: number | null, digits = 3) {
-  if (value == null) return "-";
-  return new Intl.NumberFormat("en", { maximumFractionDigits: digits }).format(value);
+function number(value?: number | string | null) {
+  const parsed = asNumber(value);
+  if (parsed == null) return "-";
+  return new Intl.NumberFormat("en", { notation: parsed >= 1_000_000 ? "compact" : "standard", maximumFractionDigits: 1 }).format(parsed);
 }
 
-function percentage(part?: number | null, total?: number | null) {
-  if (part == null || total == null || total <= 0) return "-";
-  return `${((part / total) * 100).toFixed(1)}%`;
+function decimal(value?: number | string | null, digits = 3) {
+  const parsed = asNumber(value);
+  if (parsed == null) return "-";
+  return new Intl.NumberFormat("en", { maximumFractionDigits: digits }).format(parsed);
+}
+
+function percentage(part?: number | string | null, total?: number | string | null) {
+  const parsedPart = asNumber(part);
+  const parsedTotal = asNumber(total);
+  if (parsedPart == null || parsedTotal == null || parsedTotal <= 0) return "-";
+  return `${((parsedPart / parsedTotal) * 100).toFixed(1)}%`;
 }
 
 function probability(value?: number | null) {
@@ -47,10 +57,11 @@ function probability(value?: number | null) {
   return value < 0.001 ? value.toExponential(2) : value.toFixed(4);
 }
 
-function bytes(value?: number | null) {
-  if (value == null) return "-";
+function bytes(value?: number | string | null) {
+  const parsed = asNumber(value);
+  if (parsed == null) return "-";
   const units = ["B", "KB", "MB", "GB"];
-  let size = value;
+  let size = parsed;
   let unit = 0;
   while (size >= 1024 && unit < units.length - 1) {
     size /= 1024;
@@ -405,7 +416,7 @@ export function InvestigationDashboard() {
 }
 
 function Stat({ label, value }: { label: string; value?: number | string | null }) {
-  return <div><p className="mono text-[14px] font-semibold text-[#dcebe6]">{typeof value === "number" ? number(value) : value ?? "-"}</p><p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#78958c]">{label}</p></div>;
+  return <div><p className="mono text-[14px] font-semibold text-[#dcebe6]">{number(value)}</p><p className="mt-0.5 text-[9px] uppercase tracking-wider text-[#78958c]">{label}</p></div>;
 }
 
 function Filter({ label, children }: { label: string; children: React.ReactNode }) {
@@ -416,8 +427,10 @@ function BottomStat({ label, value }: { label: string; value?: number | string |
   return <div className="bg-[#0b1715] px-4 py-3"><p className="eyebrow">{label}</p><p className="mono mt-1 text-sm font-semibold text-[#cfe1db]">{typeof value === "number" ? number(value) : value ?? "-"}</p></div>;
 }
 
-function MemoryRow({ label, value = 0, limit = 1, count = 0 }: { label: string; value?: number; limit?: number; count?: number }) {
-  const percent = Math.min(100, (value / Math.max(limit, 1)) * 100);
+function MemoryRow({ label, value = 0, limit = 1, count = 0 }: { label: string; value?: number | string; limit?: number | string; count?: number }) {
+  const numericValue = asNumber(value) ?? 0;
+  const numericLimit = asNumber(limit) ?? 1;
+  const percent = Math.min(100, (numericValue / Math.max(numericLimit, 1)) * 100);
   return <div className="mb-3"><div className="mb-1.5 flex justify-between text-[10px]"><span className="font-semibold text-[#aac2ba]">{label} <span className="text-[#607d74]">({count})</span></span><span className="mono text-[#78958c]">{bytes(value)} / {bytes(limit)}</span></div><div className="metric-bar"><span style={{ width: `${percent}%` }} /></div></div>;
 }
 
@@ -494,8 +507,10 @@ function ReductionFlow({ window }: { window: SliceSummary }) {
   </div>;
 }
 
-function ReductionBar({ label, retained, source }: { label: string; retained?: number | null; source?: number | null }) {
-  const percent = source != null && source > 0 && retained != null ? Math.min(100, (retained / source) * 100) : 0;
+function ReductionBar({ label, retained, source }: { label: string; retained?: number | string | null; source?: number | string | null }) {
+  const numericRetained = asNumber(retained);
+  const numericSource = asNumber(source);
+  const percent = numericSource != null && numericSource > 0 && numericRetained != null ? Math.min(100, (numericRetained / numericSource) * 100) : 0;
   return <div>
     <div className="mb-1.5 flex items-center justify-between gap-2 text-[9px]">
       <span className="font-semibold text-[#9ab2aa]">{label}</span>

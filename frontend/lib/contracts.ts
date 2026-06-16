@@ -1,60 +1,61 @@
 export type RunState = "NotStarted" | "Running" | "Completed" | "Failed" | "Canceled";
 export type RetentionLevel = "Summary" | "Projection" | "Detailed";
+export type Int64String = string;
 
 export interface IndexingMetrics {
-  factsRead: number;
-  edgeFactsRead: number;
-  attributeFactsRead: number;
-  documentsCreated: number;
-  documentsClosed: number;
-  interactionsCreated: number;
-  interactionsClosed: number;
-  factsSkippedWithoutTimestamp: number;
-  lateFactsSkipped: number;
-  slicesEmitted: number;
-  unknownNodeKindUses: number;
+  factsRead: Int64String;
+  edgeFactsRead: Int64String;
+  attributeFactsRead: Int64String;
+  documentsCreated: Int64String;
+  documentsClosed: Int64String;
+  interactionsCreated: Int64String;
+  interactionsClosed: Int64String;
+  factsSkippedWithoutTimestamp: Int64String;
+  lateFactsSkipped: Int64String;
+  slicesEmitted: Int64String;
+  unknownNodeKindUses: Int64String;
 }
 
 export interface RunStatus {
   state: RunState;
-  elapsedSeconds: number;
+  elapsedSeconds: Int64String;
   isPartial: boolean;
   indexingMetrics: IndexingMetrics | null;
   filteringMetrics: FilteringMetrics | null;
 }
 
 export interface FilteringMetrics {
-  sourceDocuments: number;
-  sourceInteractions: number;
-  candidateEdges: number;
-  retainedDocuments: number;
-  retainedEdges: number;
+  sourceDocuments: Int64String;
+  sourceInteractions: Int64String;
+  candidateEdges: Int64String;
+  retainedDocuments: Int64String;
+  retainedEdges: Int64String;
   sourceSemanticWeight: number;
   retainedSemanticWeight: number;
-  slicesEmitted: number;
+  slicesEmitted: Int64String;
 }
 
 export interface MemoryPressure {
   retainedDetailedSlices: number;
   retainedProjections: number;
   totalSummaries: number;
-  estimatedDetailedBytes: number;
-  estimatedProjectionBytes: number;
-  detailedBytesLimit: number;
-  projectionBytesLimit: number;
+  estimatedDetailedBytes: Int64String;
+  estimatedProjectionBytes: Int64String;
+  detailedBytesLimit: Int64String;
+  projectionBytesLimit: Int64String;
   evictedDetailedSlices: number;
   evictedProjections: number;
-  gcTotalMemoryBytes: number;
-  workingSetBytes: number;
-  gcHeapSizeBytes: number;
+  gcTotalMemoryBytes: Int64String;
+  workingSetBytes: Int64String;
+  gcHeapSizeBytes: Int64String;
 }
 
 export interface FamilyInfo {
   id: number;
   key: string;
   name: string;
-  firstWindowStartNanos: string;
-  lastWindowStartNanos: string;
+  firstWindowStartNanos: Int64String;
+  lastWindowStartNanos: Int64String;
 }
 
 export interface JaccardDistribution {
@@ -72,8 +73,8 @@ export interface SliceSummary {
   familyId: number;
   familyKey: string;
   familyName: string;
-  windowStartNanos: string;
-  windowEndNanos: string;
+  windowStartNanos: Int64String;
+  windowEndNanos: Int64String;
   windowStartIso: string;
   documentCount: number;
   interactionCount: number;
@@ -141,8 +142,8 @@ export interface NodeDetail extends ProjectedNode {
 
 export interface EvidencePointer {
   segmentPath: string;
-  syncBlockOffset: number;
-  timestampNanos: number | null;
+  syncBlockOffset: Int64String;
+  timestampNanos: Int64String | null;
   eventId: string | null;
 }
 

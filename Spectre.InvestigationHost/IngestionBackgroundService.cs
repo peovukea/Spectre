@@ -27,11 +27,9 @@ public sealed class IngestionBackgroundService : BackgroundService
         _logger = logger;
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Run on background thread so Kestrel is not blocked
-        _ = Task.Run(() => RunIngestion(stoppingToken), stoppingToken);
-        await Task.CompletedTask;
+        return Task.Run(() => RunIngestion(stoppingToken), CancellationToken.None);
     }
 
     private void RunIngestion(CancellationToken ct)

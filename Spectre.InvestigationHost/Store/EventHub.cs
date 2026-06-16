@@ -2,12 +2,16 @@ using System.Threading.Channels;
 
 namespace Spectre.InvestigationHost.Store;
 
-public sealed record ServerSentEvent(string EventType, string Data);
+public sealed record ServerSentEvent(string EventType, string Data)
+{
+    public long Id { get; init; }
+}
 
 public sealed class EventHub
 {
     private readonly object _lock = new();
     private readonly HashSet<Channel<ServerSentEvent>> _subscribers = [];
+    private long _nextEventId;
 
     public IAsyncEnumerable<ServerSentEvent> Subscribe(CancellationToken ct)
     {
@@ -34,11 +38,13 @@ public sealed class EventHub
 
     public void Publish(ServerSentEvent sse)
     {
+        var eventWithId = sse with { Id = Interlocked.Increment(ref _nextEventId) };
+
         lock (_lock)
         {
             foreach (var channel in _subscribers)
             {
-                channel.Writer.TryWrite(sse);
+                channel.Writer.TryWrite(eventWithId);
             }
         }
     }

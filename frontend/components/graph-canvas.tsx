@@ -12,6 +12,22 @@ interface Props {
   onEdge: (edge: ProjectedEdge) => void;
 }
 
+interface SigmaNodeAttributes extends ProjectedNode {
+  x: number;
+  y: number;
+  size: number;
+  color: string;
+  label: string;
+}
+
+interface SigmaEdgeAttributes extends ProjectedEdge {
+  size: number;
+  color: string;
+}
+
+type SigmaGraph = Graph<SigmaNodeAttributes, SigmaEdgeAttributes>;
+type SigmaRenderer = Sigma<SigmaNodeAttributes, SigmaEdgeAttributes>;
+
 function colorForKind(kind: string) {
   let hash = 0;
   for (let index = 0; index < kind.length; index++) hash = (hash * 31 + kind.charCodeAt(index)) | 0;
@@ -19,9 +35,63 @@ function colorForKind(kind: string) {
   return palette[Math.abs(hash) % palette.length];
 }
 
+function prepareSigmaGraph(projection: GraphProjection): SigmaGraph {
+  const sigmaGraph = new Graph<SigmaNodeAttributes, SigmaEdgeAttributes>({ multi: true, type: "directed" });
+  const degree = new Map<string, number>();
+  const kindCounts = new Map<string, number>();
+  const kindPositions = new Map<string, number>();
+  const kindIndex = new Map<string, number>();
+
+  for (const node of projection.nodes) {
+    degree.set(node.id, 0);
+    kindCounts.set(node.kind, (kindCounts.get(node.kind) ?? 0) + 1);
+  }
+
+  for (const edge of projection.edges) {
+    degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+    degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+  }
+
+  [...kindCounts.keys()].sort().forEach((kind, index) => kindIndex.set(kind, index));
+
+  for (const node of projection.nodes) {
+    const currentPosition = kindPositions.get(node.kind) ?? 0;
+    kindPositions.set(node.kind, currentPosition + 1);
+
+    const currentKindIndex = kindIndex.get(node.kind) ?? 0;
+    const currentKindCount = kindCounts.get(node.kind) ?? 1;
+    const angle = (currentPosition / currentKindCount) * Math.PI * 2 + currentKindIndex * 0.7;
+    const radius = 0.35 + currentKindIndex * 0.17;
+
+    sigmaGraph.addNode(node.id, {
+      ...node,
+      x: Math.cos(angle) * radius,
+      y: Math.sin(angle) * radius,
+      size: Math.min(12, 3.5 + Math.sqrt(degree.get(node.id) ?? 0)),
+      color: colorForKind(node.kind),
+      label: `${node.label} - ${node.kind}`,
+    });
+  }
+
+  const weights = projection.edges.map((edge) => edge.semanticWeight);
+  const minWeight = Math.min(...weights, 1);
+  const maxWeight = Math.max(...weights, 1);
+  const weightRange = Math.max(Math.log1p(maxWeight - minWeight), 1);
+
+  projection.edges.forEach((edge, index) => {
+    sigmaGraph.addDirectedEdgeWithKey(`edge-${index}`, edge.source, edge.target, {
+      ...edge,
+      size: 0.4 + (Math.log1p(edge.semanticWeight - minWeight) / weightRange) * 2.2,
+      color: "#326c5f",
+    });
+  });
+
+  return sigmaGraph;
+}
+
 export function GraphCanvas({ graph, loading, onNode, onEdge }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const rendererRef = useRef<Sigma | null>(null);
+  const rendererRef = useRef<SigmaRenderer | null>(null);
   const onNodeRef = useRef(onNode);
   const onEdgeRef = useRef(onEdge);
   const selectedNodeRef = useRef<string | null>(null);
@@ -53,44 +123,14 @@ export function GraphCanvas({ graph, loading, onNode, onEdge }: Props) {
     if (!container || !graph) return;
 
     let active = true;
+    setRenderError(null);
+    setSelectedNode(null);
+    setHoveredNode(null);
+    setSelectedEdge(null);
     void import("sigma").then(({ default: SigmaRenderer }) => {
       if (!active) return;
       try {
-      const sigmaGraph = new Graph({ multi: true, type: "directed" });
-      const degree = new Map(graph.nodes.map((node) => [node.id, 0]));
-      graph.edges.forEach((edge) => {
-        degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
-        degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
-      });
-
-      const kinds = [...new Set(graph.nodes.map((node) => node.kind))].sort();
-      graph.nodes.forEach((node) => {
-        const kindIndex = kinds.indexOf(node.kind);
-        const kindNodes = graph.nodes.filter((candidate) => candidate.kind === node.kind);
-        const kindPosition = kindNodes.findIndex((candidate) => candidate.id === node.id);
-        const angle = (kindPosition / Math.max(kindNodes.length, 1)) * Math.PI * 2 + kindIndex * 0.7;
-        const radius = 0.35 + kindIndex * 0.17;
-        sigmaGraph.addNode(node.id, {
-          ...node,
-          x: Math.cos(angle) * radius,
-          y: Math.sin(angle) * radius,
-          size: Math.min(12, 3.5 + Math.sqrt(degree.get(node.id) ?? 0)),
-          color: colorForKind(node.kind),
-          label: `${node.label} · ${node.kind}`,
-        });
-      });
-
-      const weights = graph.edges.map((edge) => edge.semanticWeight);
-      const minWeight = Math.min(...weights, 1);
-      const maxWeight = Math.max(...weights, 1);
-      graph.edges.forEach((edge, index) => {
-        sigmaGraph.addDirectedEdgeWithKey(`edge-${index}`, edge.source, edge.target, {
-          ...edge,
-          size: 0.4 + (Math.log1p(edge.semanticWeight - minWeight) / Math.max(Math.log1p(maxWeight - minWeight), 1)) * 2.2,
-          color: "#326c5f",
-        });
-      });
-
+        const sigmaGraph = prepareSigmaGraph(graph);
       const renderer = new SigmaRenderer(sigmaGraph, container, {
         allowInvalidContainer: true,
         defaultEdgeColor: "#326c5f",
@@ -133,12 +173,12 @@ export function GraphCanvas({ graph, loading, onNode, onEdge }: Props) {
       renderer.on("clickNode", ({ node }) => {
         setSelectedNode(node);
         setSelectedEdge(null);
-        onNodeRef.current(sigmaGraph.getNodeAttributes(node) as unknown as ProjectedNode);
+        onNodeRef.current(sigmaGraph.getNodeAttributes(node));
       });
       renderer.on("clickEdge", ({ edge }) => {
         setSelectedEdge(edge);
         setSelectedNode(null);
-        onEdgeRef.current(sigmaGraph.getEdgeAttributes(edge) as unknown as ProjectedEdge);
+        onEdgeRef.current(sigmaGraph.getEdgeAttributes(edge));
       });
       renderer.on("clickStage", () => {
         setSelectedNode(null);
@@ -188,10 +228,10 @@ export function GraphCanvas({ graph, loading, onNode, onEdge }: Props) {
       {graph && (
         <>
           <div className="pointer-events-none absolute left-3 top-3 rounded border border-[#285448] bg-[#07130fdd] px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#8eb5a9]">
-            {graph.nodes.length} nodes · {graph.edges.length} backbone edges
+            {graph.nodes.length} nodes - {graph.edges.length} backbone edges
           </div>
           <div className="absolute bottom-3 right-3 flex items-center overflow-hidden rounded-lg border border-[#285448] bg-[#07130fee] shadow-lg">
-            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1.35)} className="grid h-9 w-9 place-items-center border-r border-[#285448] text-lg font-semibold text-[#9fc8ba] hover:bg-[#123329]">−</button>
+            <button type="button" aria-label="Zoom out" onClick={() => zoomBy(1.35)} className="grid h-9 w-9 place-items-center border-r border-[#285448] text-lg font-semibold text-[#9fc8ba] hover:bg-[#123329]">-</button>
             <button type="button" aria-label="Reset graph viewport" onClick={resetCamera} className="mono h-9 min-w-14 border-r border-[#285448] px-2 text-[10px] font-semibold text-[#9fc8ba] hover:bg-[#123329]">{zoom}%</button>
             <button type="button" aria-label="Zoom in" onClick={() => zoomBy(0.74)} className="grid h-9 w-9 place-items-center text-lg font-semibold text-[#9fc8ba] hover:bg-[#123329]">+</button>
           </div>
@@ -200,7 +240,7 @@ export function GraphCanvas({ graph, loading, onNode, onEdge }: Props) {
 
       {!graph && !loading && (
         <div className="absolute inset-0 grid place-items-center text-center text-sm text-[#78958c]">
-          <div><div className="mb-2 text-3xl text-[#315b50]">◇</div>Select a retained window to inspect its graph</div>
+          <div><div className="mb-2 text-3xl text-[#315b50]">+</div>Select a retained window to inspect its graph</div>
         </div>
       )}
       {loading && (

@@ -95,12 +95,12 @@ public sealed class DashboardQueryStore
             var (familyKey, familyName) = FamilyKeyResolver.Resolve(basePath);
             if (!_families.TryGetValue(familyKey, out var family))
             {
-                family = new FamilyInfoDto(_families.Count + 1, familyKey, familyName, slice.WindowStartNanos, slice.WindowEndNanos);
+                family = new FamilyInfoDto(_families.Count + 1, familyKey, familyName, slice.WindowStartNanos, slice.WindowStartNanos);
                 _families[familyKey] = family;
             }
             else
             {
-                _families[familyKey] = family with { LastWindowStartNanos = Math.Max(family.LastWindowStartNanos, slice.WindowEndNanos) };
+                _families[familyKey] = family with { LastWindowStartNanos = Math.Max(family.LastWindowStartNanos, slice.WindowStartNanos) };
             }
 
             // 2. Accumulate predicates and node kinds
@@ -307,7 +307,7 @@ public sealed class DashboardQueryStore
         finally { _lock.ExitReadLock(); }
     }
 
-    public GraphProjectionDto? GetProjection(int familyId, long windowStart, GraphQueryParameters p)
+    public StoreQueryResult<GraphProjectionDto> GetProjection(int familyId, long windowStart, GraphQueryParameters p)
     {
         bool isDefault = p.MinWeight == 0.0 && p.Predicate == null && p.NodeKind == null && 
                          p.MaxNodes == DefaultMaxNodes && p.MaxEdges == DefaultMaxEdges;
@@ -318,18 +318,18 @@ public sealed class DashboardQueryStore
         try
         {
             var summary = _summaries.FirstOrDefault(s => s.FamilyId == familyId && s.WindowStartNanos == windowStart);
-            if (summary == null) return null;
+            if (summary == null) return StoreQueryResult<GraphProjectionDto>.NotFound();
 
             if (summary.RetentionLevel == SliceRetentionLevel.Summary)
-                throw new InvalidOperationException("410 Gone");
+                return StoreQueryResult<GraphProjectionDto>.Gone();
 
             if (summary.RetentionLevel == SliceRetentionLevel.Projection)
             {
-                if (!isDefault) throw new InvalidOperationException("410 Gone");
+                if (!isDefault) return StoreQueryResult<GraphProjectionDto>.Gone();
                 var proj = _projections.FirstOrDefault(x => x.FamilyId == familyId && x.WindowStartNanos == windowStart);
                 if (proj != null)
                 {
-                    return new GraphProjectionDto(proj.Nodes, proj.Edges, proj.Truncated, proj.TotalMatchingEdges, DefaultMaxNodes, DefaultMaxEdges, SliceRetentionLevel.Projection);
+                    return StoreQueryResult<GraphProjectionDto>.Found(new GraphProjectionDto(proj.Nodes, proj.Edges, proj.Truncated, proj.TotalMatchingEdges, DefaultMaxNodes, DefaultMaxEdges, SliceRetentionLevel.Projection));
                 }
             }
 
@@ -343,13 +343,13 @@ public sealed class DashboardQueryStore
             _lock.ExitReadLock();
         }
 
-        if (detailedSlice == null) throw new InvalidOperationException("410 Gone");
+        if (detailedSlice == null) return StoreQueryResult<GraphProjectionDto>.Gone();
 
         // Expensive query outside lock
         _expensiveQuerySemaphore.Wait();
         try
         {
-            return BuildProjectionFromSlice(detailedSlice, p);
+            return StoreQueryResult<GraphProjectionDto>.Found(BuildProjectionFromSlice(detailedSlice, p));
         }
         finally
         {
@@ -357,7 +357,7 @@ public sealed class DashboardQueryStore
         }
     }
 
-    public NodeDetailDto? GetNodeDetail(int familyId, long windowStart, Guid nodeId)
+    public StoreQueryResult<NodeDetailDto> GetNodeDetail(int familyId, long windowStart, Guid nodeId)
     {
         DisparityGraphSlice? detailedSlice = null;
         _lock.EnterReadLock();
@@ -370,19 +370,19 @@ public sealed class DashboardQueryStore
             _lock.ExitReadLock();
         }
 
-        if (detailedSlice == null) throw new InvalidOperationException("410 Gone");
+        if (detailedSlice == null) return StoreQueryResult<NodeDetailDto>.Gone();
 
         var doc = detailedSlice.Documents.FirstOrDefault(d => d.NodeId == nodeId);
-        if (doc == null) return null;
+        if (doc == null) return StoreQueryResult<NodeDetailDto>.NotFound();
 
-        return new NodeDetailDto(
+        return StoreQueryResult<NodeDetailDto>.Found(new NodeDetailDto(
             doc.NodeId.ToString("D"), doc.NodeKind, doc.NodeId.ToString("D")[..8],
             doc.JaccardToNodeKindBaseline, doc.JaccardToPreviousSelf,
             new Dictionary<string, int>(doc.TermCounts),
-            new Dictionary<string, double>(doc.TfidfWeights));
+            new Dictionary<string, double>(doc.TfidfWeights)));
     }
 
-    public InteractionDetailDto? GetInteractionDetail(int familyId, long windowStart, Guid source, Guid target)
+    public StoreQueryResult<InteractionDetailDto> GetInteractionDetail(int familyId, long windowStart, Guid source, Guid target)
     {
         DisparityGraphSlice? detailedSlice = null;
         _lock.EnterReadLock();
@@ -395,12 +395,12 @@ public sealed class DashboardQueryStore
             _lock.ExitReadLock();
         }
 
-        if (detailedSlice == null) throw new InvalidOperationException("410 Gone");
+        if (detailedSlice == null) return StoreQueryResult<InteractionDetailDto>.Gone();
 
         var inter = detailedSlice.Interactions.FirstOrDefault(i => i.SourceNodeId == source && i.TargetNodeId == target);
-        if (inter == null) return null;
+        if (inter == null) return StoreQueryResult<InteractionDetailDto>.NotFound();
 
-        return new InteractionDetailDto(
+        return StoreQueryResult<InteractionDetailDto>.Found(new InteractionDetailDto(
             inter.SourceNodeId.ToString("D"), inter.TargetNodeId.ToString("D"),
             inter.Count, inter.SemanticWeight,
             new Dictionary<string, int>(inter.PredicateCounts),
@@ -408,7 +408,7 @@ public sealed class DashboardQueryStore
             new Dictionary<string, int>(inter.TermCounts),
             inter.Evidence.Select(e => new EvidencePointerDto(e.Source.SegmentPath, e.Source.SyncBlockOffset, e.TimestampNanos, e.EventId?.ToString("D"))).ToList(),
             inter.SourceOutgoing,
-            inter.TargetIncoming);
+            inter.TargetIncoming));
     }
 
     private static GraphProjectionDto BuildProjectionFromSlice(DisparityGraphSlice slice, GraphQueryParameters p)
@@ -547,7 +547,11 @@ public sealed class DashboardQueryStore
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        Converters =
+        {
+            new LongAsStringJsonConverter(),
+            new System.Text.Json.Serialization.JsonStringEnumConverter()
+        }
     };
 
     private sealed record DetailedSliceEntry(int FamilyId, long WindowStartNanos, DisparityGraphSlice Slice, long EstimatedBytes);
