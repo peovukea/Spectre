@@ -1,0 +1,30 @@
+<Solution>
+  <Folder Name="/src/Shared/">
+    <Project Path="src/Shared/Spectre.Ingestion.Api/Spectre.Ingestion.Api.csproj" />
+    <Project Path="src/Shared/Spectre.Indexing.Api/Spectre.Indexing.Api.csproj" />
+    <Project Path="src/Shared/Spectre.Backbone.Api/Spectre.Backbone.Api.csproj" />
+    <Project Path="src/Shared/Spectre.Investigation.Api/Spectre.Investigation.Api.csproj" />
+    <Project Path="src/Shared/Spectre.Pipeline.Api/Spectre.Pipeline.Api.csproj" />
+  </Folder>
+  <Folder Name="/src/Ingestion/">
+    <Project Path="src/Ingestion/Spectre.CdmIngestion/Spectre.CdmIngestion.csproj" />
+  </Folder>
+  <Folder Name="/src/Indexing/">
+    <Project Path="src/Indexing/Spectre.SemanticIndexing/Spectre.SemanticIndexing.csproj" />
+  </Folder>
+  <Folder Name="/src/Backbone/">
+    <Project Path="src/Backbone/Spectre.DisparityFiltering/Spectre.DisparityFiltering.csproj" />
+  </Folder>
+  <Folder Name="/src/Investigation/">
+    <Project Path="src/Investigation/Spectre.InvestigationHost/Spectre.InvestigationHost.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Spectre.CdmIngestion.Tests/Spectre.CdmIngestion.Tests.csproj" />
+    <Project Path="tests/Spectre.DisparityFiltering.Tests/Spectre.DisparityFiltering.Tests.csproj" />
+    <Project Path="tests/Spectre.InvestigationHost.Tests/Spectre.InvestigationHost.Tests.csproj" />
+    <Project Path="tests/Spectre.SemanticIndexing.Tests/Spectre.SemanticIndexing.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/GenerateCdm18/GenerateCdm18.csproj" />
+  </Folder>
+</Solution>

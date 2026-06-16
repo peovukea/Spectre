@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Generated Avro records mirror schema documentation that is not always valid XML. -->
+    <NoWarn>$(NoWarn);CS1570;CS1591</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Apache.Avro" Version="1.12.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Contracts.cs" />
+    <Compile Remove="Pipeline\IngestionMetrics.cs" />
+    <Compile Remove="Pipeline\IngestionOutcome.cs" />
+    <Compile Remove="Pipeline\IngestionResult.cs" />
+    <Compile Remove="Sinks\IGraphFactSink.cs" />
+    <Compile Remove="Sinks\IGraphFactFamilySink.cs" />
+    <ProjectReference Include="..\..\Shared\Spectre.Ingestion.Api\Spectre.Ingestion.Api.csproj" />
+  </ItemGroup>
+</Project>

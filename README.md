@@ -10,7 +10,6 @@ graph state.
 | Project | Purpose |
 |---|---|
 | [`Spectre.CdmIngestion`](Spectre.CdmIngestion/README.md) | Reusable family discovery, Avro reader, normalized datum boundary, projector, sinks, and metrics. |
-| [`Spectre.CdmIngestion.Cli`](Spectre.CdmIngestion.Cli/README.md) | Executable host with sample JSONL output, Ctrl+C cancellation, and partial metrics. |
 | [`Spectre.CdmIngestion.Tests`](Spectre.CdmIngestion.Tests/README.md) | Unit and deterministic Avro object-container tests. |
 | [`Spectre.SemanticIndexing`](Spectre.SemanticIndexing/README.md) | Streaming Layer 2 behavioral documents, semantic interactions, TF-IDF, and exact Jaccard scoring. |
 | [`Spectre.SemanticIndexing.Tests`](Spectre.SemanticIndexing.Tests) | Focused handcrafted graph-fact tests for Layer 2. |
@@ -47,29 +46,8 @@ dotnet test Spectre.CdmIngestion.slnx
 
 ## Run
 
-Create the default capped JSONL sample:
-
-```powershell
-dotnet run --project Spectre.CdmIngestion.Cli -- `
-  --input data/cadets `
-  --sample-output output/graphfacts.sample.jsonl `
-  --sample-limit 50000
-```
-
-Run the entire ingestion path without creating sample output:
-
-```powershell
-dotnet run --project Spectre.CdmIngestion.Cli -c Release -- `
-  --input data/cadets `
-  --metrics-only
-```
-
-`--input` is repeatable and accepts directories or base `.bin` paths. Direct
-numbered-segment inputs are rejected. The default sample path is
-`output/graphfacts.sample.jsonl`, and the default sample limit is `50000`.
-
-Press Ctrl+C for cooperative cancellation. The CLI flushes partial output,
-prints partial metrics, and exits with code `130`.
+Drive ingestion through the API host. The reusable ingestion library remains
+available for composition inside the web host and tests.
 
 ## Runtime Baseline
 
