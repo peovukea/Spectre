@@ -5,10 +5,10 @@ namespace Spectre.InvestigationHost.Store;
 
 public sealed class DashboardSliceSinkAdapter : IDisparityGraphSliceSink
 {
-    private readonly DashboardQueryStore _store;
+    private readonly IInvestigationStore _store;
     private int _disposed;
 
-    public DashboardSliceSinkAdapter(DashboardQueryStore store) => _store = store;
+    public DashboardSliceSinkAdapter(IInvestigationStore store) => _store = store;
 
     public void Write(DisparityGraphSlice slice)
     {

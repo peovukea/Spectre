@@ -5,7 +5,7 @@ using Spectre.SemanticIndexing;
 
 namespace Spectre.InvestigationHost.Store;
 
-public sealed class DashboardQueryStore
+public sealed class DashboardQueryStore : IInvestigationStore
 {
     private readonly EventHub _eventHub;
     private readonly ReaderWriterLockSlim _lock = new();
@@ -75,6 +75,10 @@ public sealed class DashboardQueryStore
     public void MarkWritesClosed()
     {
         // Handled by run state transition externally, but can trigger final flush
+    }
+
+    public void RecoverInterruptedRuns()
+    {
     }
 
     public void AcceptSlice(DisparityGraphSlice slice)
@@ -248,7 +252,31 @@ public sealed class DashboardQueryStore
         ), JsonOptions)));
     }
 
-    public RunStatusDto GetRunStatus()
+    public IReadOnlyList<RunInfoDto> GetRuns()
+    {
+        _lock.EnterReadLock();
+        try
+        {
+            return
+            [
+                new RunInfoDto(
+                    1,
+                    DateTimeOffset.UtcNow.Subtract(_runTimer.Elapsed).ToString("o"),
+                    _runState is RunState.Completed or RunState.Failed or RunState.Canceled ? DateTimeOffset.UtcNow.ToString("o") : null,
+                    _runState,
+                    (long)_runTimer.Elapsed.TotalSeconds,
+                    _isPartial,
+                    _families.Count,
+                    _summaries.Count)
+            ];
+        }
+        finally
+        {
+            _lock.ExitReadLock();
+        }
+    }
+
+    public RunStatusDto GetRunStatus(long? runId = null)
     {
         _lock.EnterReadLock();
         try
@@ -279,35 +307,35 @@ public sealed class DashboardQueryStore
         }
     }
 
-    public IReadOnlyList<FamilyInfoDto> GetFamilies()
+    public IReadOnlyList<FamilyInfoDto> GetFamilies(long? runId = null)
     {
         _lock.EnterReadLock();
         try { return _families.Values.ToList(); }
         finally { _lock.ExitReadLock(); }
     }
 
-    public IReadOnlyList<SliceSummaryDto> GetWindows(int familyId)
+    public IReadOnlyList<SliceSummaryDto> GetWindows(int familyId, long? runId = null)
     {
         _lock.EnterReadLock();
         try { return _summaries.Where(s => s.FamilyId == familyId).ToList(); }
         finally { _lock.ExitReadLock(); }
     }
 
-    public IReadOnlySet<string> GetPredicates()
+    public IReadOnlySet<string> GetPredicates(long? runId = null)
     {
         _lock.EnterReadLock();
         try { return new HashSet<string>(_predicates); }
         finally { _lock.ExitReadLock(); }
     }
 
-    public IReadOnlySet<string> GetNodeKinds()
+    public IReadOnlySet<string> GetNodeKinds(long? runId = null)
     {
         _lock.EnterReadLock();
         try { return new HashSet<string>(_nodeKinds); }
         finally { _lock.ExitReadLock(); }
     }
 
-    public StoreQueryResult<GraphProjectionDto> GetProjection(int familyId, long windowStart, GraphQueryParameters p)
+    public StoreQueryResult<GraphProjectionDto> GetProjection(int familyId, long windowStart, GraphQueryParameters p, long? runId = null)
     {
         bool isDefault = p.MinWeight == 0.0 && p.Predicate == null && p.NodeKind == null && 
                          p.MaxNodes == DefaultMaxNodes && p.MaxEdges == DefaultMaxEdges;
@@ -357,7 +385,7 @@ public sealed class DashboardQueryStore
         }
     }
 
-    public StoreQueryResult<NodeDetailDto> GetNodeDetail(int familyId, long windowStart, Guid nodeId)
+    public StoreQueryResult<NodeDetailDto> GetNodeDetail(int familyId, long windowStart, Guid nodeId, long? runId = null)
     {
         DisparityGraphSlice? detailedSlice = null;
         _lock.EnterReadLock();
@@ -382,7 +410,7 @@ public sealed class DashboardQueryStore
             new Dictionary<string, double>(doc.TfidfWeights)));
     }
 
-    public StoreQueryResult<InteractionDetailDto> GetInteractionDetail(int familyId, long windowStart, Guid source, Guid target)
+    public StoreQueryResult<InteractionDetailDto> GetInteractionDetail(int familyId, long windowStart, Guid source, Guid target, long? runId = null)
     {
         DisparityGraphSlice? detailedSlice = null;
         _lock.EnterReadLock();

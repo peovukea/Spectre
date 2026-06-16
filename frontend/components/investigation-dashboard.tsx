@@ -12,6 +12,7 @@ import type {
   ProjectedEdge,
   ProjectedNode,
   RetentionLevel,
+  RunInfo,
   RunStatus,
   SliceSummary,
 } from "@/lib/contracts";
@@ -74,6 +75,10 @@ function time(iso: string) {
   return new Intl.DateTimeFormat("en", { month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date(iso));
 }
 
+function runLabel(run: RunInfo) {
+  return `${time(run.startedAtUtc)} · ${run.state} · ${number(run.windowCount)} windows`;
+}
+
 function retentionTone(level: RetentionLevel) {
   return level === "Detailed" ? "text-[#50e3a4] border-[#285b49] bg-[#102d24]" :
     level === "Projection" ? "text-[#f5b95f] border-[#604a28] bg-[#2a2113]" :
@@ -81,6 +86,8 @@ function retentionTone(level: RetentionLevel) {
 }
 
 export function InvestigationDashboard() {
+  const [runs, setRuns] = useState<RunInfo[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [status, setStatus] = useState<RunStatus | null>(null);
   const [memory, setMemory] = useState<MemoryPressure | null>(null);
   const [families, setFamilies] = useState<FamilyInfo[]>([]);
@@ -96,11 +103,14 @@ export function InvestigationDashboard() {
   const [connection, setConnection] = useState<"connecting" | "live" | "offline">("connecting");
   const [selected, setSelected] = useState<NodeDetail | InteractionDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [ingestionBusy, setIngestionBusy] = useState<"start" | "cancel" | null>(null);
 
   const selectedWindow = useMemo(
     () => windows.find((window) => window.windowStartNanos === windowStart) ?? null,
     [windows, windowStart],
   );
+  const selectedRun = runs.find((run) => run.id === selectedRunId) ?? null;
+  const viewingHistoricalRun = selectedRunId != null;
   const selectedFamily = families.find((family) => family.id === familyId) ?? null;
   const customFilters = JSON.stringify(filters) !== JSON.stringify(DEFAULT_FILTERS);
   const visibleWindows = useMemo(
@@ -110,22 +120,28 @@ export function InvestigationDashboard() {
 
   const refreshGlobal = useCallback(async () => {
     try {
-      const [nextStatus, nextMemory, nextFamilies, nextPredicates, nextKinds] = await Promise.all([
-        api.status(), api.memory(), api.families(), api.predicates(), api.nodeKinds(),
+      const [nextRuns, nextStatus, nextMemory, nextFamilies, nextPredicates, nextKinds] = await Promise.all([
+        api.runs(),
+        api.status(selectedRunId),
+        api.memory(),
+        api.families(selectedRunId),
+        api.predicates(selectedRunId),
+        api.nodeKinds(selectedRunId),
       ]);
+      setRuns(nextRuns);
       setStatus(nextStatus);
       setMemory(nextMemory);
       setFamilies(nextFamilies);
       setPredicates(nextPredicates);
       setNodeKinds(nextKinds);
-      setFamilyId((current) => current ?? nextFamilies.at(-1)?.id ?? null);
+      setFamilyId((current) => nextFamilies.some((family) => family.id === current) ? current : nextFamilies.at(-1)?.id ?? null);
     } catch {
       setConnection("offline");
     }
-  }, []);
+  }, [selectedRunId]);
 
   const refreshWindows = useCallback(async (id: number) => {
-    const next = await api.windows(id);
+    const next = await api.windows(id, selectedRunId);
     const latestVisible = next.slice(-VISIBLE_WINDOW_COUNT);
     const latestGraphWindow = latestVisible.findLast((window) => window.retentionLevel !== "Summary");
     setWindows(next);
@@ -135,7 +151,16 @@ export function InvestigationDashboard() {
         ? current
         : latestGraphWindow?.windowStartNanos ?? next.at(-1)?.windowStartNanos ?? null,
     );
-  }, []);
+  }, [selectedRunId]);
+
+  function chooseRun(runId: string | null) {
+    setSelectedRunId(runId);
+    setFamilyId(null);
+    setWindowStart(null);
+    setGraph(null);
+    setSelected(null);
+    setNotice(null);
+  }
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(refreshGlobal, 0);
@@ -194,7 +219,7 @@ export function InvestigationDashboard() {
       setGraphLoading(true);
       setNotice(null);
       setSelected(null);
-      api.graph(familyId, windowStart, filters)
+      api.graph(familyId, windowStart, filters, selectedRunId)
         .then((next) => {
           if (!active) return;
           setGraph(next);
@@ -213,7 +238,7 @@ export function InvestigationDashboard() {
       active = false;
       window.clearTimeout(load);
     };
-  }, [customFilters, familyId, filters, selectedWindow?.retentionLevel, windowStart]);
+  }, [customFilters, familyId, filters, selectedRunId, selectedWindow?.retentionLevel, windowStart]);
 
   async function selectNode(node: ProjectedNode) {
     if (familyId == null || windowStart == null) return;
@@ -223,7 +248,7 @@ export function InvestigationDashboard() {
     }
     setDetailLoading(true);
     try {
-      setSelected(await api.node(familyId, windowStart, node.id));
+      setSelected(await api.node(familyId, windowStart, node.id, selectedRunId));
     } catch (error) {
       if (error instanceof ApiError && error.status === 410) {
         await refreshWindows(familyId);
@@ -244,7 +269,7 @@ export function InvestigationDashboard() {
     }
     setDetailLoading(true);
     try {
-      setSelected(await api.interaction(familyId, windowStart, edge.source, edge.target));
+      setSelected(await api.interaction(familyId, windowStart, edge.source, edge.target, selectedRunId));
     } catch (error) {
       if (error instanceof ApiError && error.status === 410) {
         await refreshWindows(familyId);
@@ -254,6 +279,38 @@ export function InvestigationDashboard() {
       }
     } finally {
       setDetailLoading(false);
+    }
+  }
+
+  async function startIngestion() {
+    setIngestionBusy("start");
+    setNotice(null);
+    try {
+      const result = await api.startIngestion();
+      setStatus(result.status);
+      setNotice(result.message);
+      await refreshGlobal();
+      window.setTimeout(() => void refreshGlobal(), 500);
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : "Ingestion could not be started.");
+    } finally {
+      setIngestionBusy(null);
+    }
+  }
+
+  async function cancelIngestion() {
+    setIngestionBusy("cancel");
+    setNotice(null);
+    try {
+      const result = await api.cancelIngestion();
+      setStatus(result.status);
+      setNotice(result.message);
+      await refreshGlobal();
+      window.setTimeout(() => void refreshGlobal(), 500);
+    } catch (error) {
+      setNotice(error instanceof ApiError ? error.message : "Ingestion could not be canceled.");
+    } finally {
+      setIngestionBusy(null);
     }
   }
 
@@ -267,18 +324,47 @@ export function InvestigationDashboard() {
             <p className="eyebrow">Semantic investigation workspace</p>
           </div>
         </div>
-        <div className="flex items-center gap-4 rounded-lg border border-[#1d3731] bg-[#0a1714] px-4 py-2">
+        <div className="flex items-center gap-3 rounded-lg border border-[#1d3731] bg-[#0a1714] px-3 py-2">
           <span className={`h-2 w-2 rounded-full ${connection === "live" ? "bg-[#50e3a4] shadow-[0_0_10px_#50e3a4]" : "bg-[#f5b95f]"}`} />
           <span className="eyebrow">{connection === "live" ? "Live stream" : connection}</span>
           <span className="h-4 w-px bg-[#28453e]" />
           <span className="text-xs font-semibold text-[#cde0d9]">{status?.state ?? "Connecting"}</span>
           {status?.isPartial && <span className="rounded border border-[#6f4a2c] bg-[#2e1f14] px-2 py-0.5 text-[10px] font-bold text-[#f5b95f]">PARTIAL</span>}
           <span className="mono text-[11px] text-[#78958c]">{number(status?.elapsedSeconds)}s</span>
+          <span className="h-4 w-px bg-[#28453e]" />
+          <button
+            onClick={startIngestion}
+            disabled={viewingHistoricalRun || ingestionBusy != null || status?.state === "Running"}
+            className="rounded-md border border-[#2b6552] bg-[#102d24] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#50e3a4] transition hover:border-[#50e3a4] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {ingestionBusy === "start" ? "Starting" : "Start"}
+          </button>
+          <button
+            onClick={cancelIngestion}
+            disabled={viewingHistoricalRun || ingestionBusy != null || status?.state !== "Running"}
+            className="rounded-md border border-[#604a28] bg-[#2a2113] px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-[#f5b95f] transition hover:border-[#f5b95f] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            {ingestionBusy === "cancel" ? "Canceling" : "Cancel"}
+          </button>
         </div>
       </header>
 
       <section className="grid gap-3 lg:h-[calc(100vh-72px)] lg:grid-cols-[245px_minmax(0,1fr)_300px]">
         <aside className="panel flex min-h-0 flex-col overflow-hidden">
+          <div className="border-b border-[#1d3731] p-4">
+            <p className="eyebrow mb-2">Investigation run</p>
+            <select
+              className="control text-xs"
+              value={selectedRunId ?? ""}
+              onChange={(event) => chooseRun(event.target.value === "" ? null : event.target.value)}
+            >
+              <option value="">Latest run</option>
+              {runs.map((run) => <option key={run.id} value={run.id}>{runLabel(run)}</option>)}
+            </select>
+            <p className="mt-2 text-[10px] text-[#78958c]">
+              {selectedRun ? `Viewing run ${selectedRun.id}` : "Following the newest run"}
+            </p>
+          </div>
           <div className="border-b border-[#1d3731] p-4">
             <p className="eyebrow mb-2">Input family</p>
             <select className="control text-xs" value={familyId ?? ""} onChange={(event) => setFamilyId(Number(event.target.value))}>

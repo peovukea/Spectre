@@ -24,6 +24,27 @@ export interface RunStatus {
   filteringMetrics: FilteringMetrics | null;
 }
 
+export interface RunInfo {
+  id: Int64String;
+  startedAtUtc: string;
+  completedAtUtc: string | null;
+  state: RunState;
+  elapsedSeconds: Int64String;
+  isPartial: boolean;
+  familyCount: number;
+  windowCount: number;
+}
+
+export interface StartIngestionRequest {
+  inputPath?: string | null;
+}
+
+export interface IngestionControlResult {
+  accepted: boolean;
+  message: string;
+  status: RunStatus;
+}
+
 export interface FilteringMetrics {
   sourceDocuments: Int64String;
   sourceInteractions: Int64String;

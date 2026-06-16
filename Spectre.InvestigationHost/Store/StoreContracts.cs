@@ -14,6 +14,16 @@ public sealed record RunStatusDto(
     SemanticIndexingMetrics? IndexingMetrics,
     DisparityFilteringMetrics? FilteringMetrics);
 
+public sealed record RunInfoDto(
+    long Id,
+    string StartedAtUtc,
+    string? CompletedAtUtc,
+    RunState State,
+    long ElapsedSeconds,
+    bool IsPartial,
+    int FamilyCount,
+    int WindowCount);
+
 public sealed record FamilyInfoDto(
     int Id,
     string Key,

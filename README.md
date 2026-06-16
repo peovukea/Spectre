@@ -16,7 +16,7 @@ graph state.
 | [`Spectre.SemanticIndexing.Tests`](Spectre.SemanticIndexing.Tests) | Focused handcrafted graph-fact tests for Layer 2. |
 | [`Spectre.DisparityFiltering`](Spectre.DisparityFiltering/README.md) | Slice-bounded Layer 3 directed disparity filtering and backbone extraction. |
 | [`Spectre.DisparityFiltering.Tests`](Spectre.DisparityFiltering.Tests) | Exact significance, consolidation, evidence, and lifecycle tests for Layer 3. |
-| [`Spectre.InvestigationHost`](Spectre.InvestigationHost) | In-memory bounded-retention API host for live backbone investigation. |
+| [`Spectre.InvestigationHost`](Spectre.InvestigationHost) | PostgreSQL-backed API host for live latest-run backbone investigation. |
 | [`Spectre.InvestigationHost.Tests`](Spectre.InvestigationHost.Tests) | Focused backbone query-store integration tests. |
 | [`tools/GenerateCdm18`](tools/GenerateCdm18/README.md) | Explicit CDM18 specific-record generation tool. |
 

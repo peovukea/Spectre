@@ -1,35 +1,75 @@
 # Investigation Host
 
 `Spectre.InvestigationHost` is an ASP.NET Core API for live inspection of the
-in-memory disparity-filtered backbone produced by the ingestion pipeline. It is
-bounded by design: summaries are retained for all observed slices, while
-detailed slices and default graph projections are kept only within configured
-memory/count limits.
+PostgreSQL-persisted disparity-filtered backbone produced by the ingestion
+pipeline. The API defaults to the latest run and also supports read-only
+historical run inspection with `runId` query parameters.
 
 ## Run
 
+Start the local PostgreSQL database:
+
 ```powershell
-dotnet run --project Spectre.InvestigationHost --configuration Release -- `
-  --InputPath d:\Proj\data\cadets
+docker-compose up -d postgres
 ```
+
+The default development connection string points to this compose service:
+
+```text
+Host=localhost;Port=55432;Database=spectre;Username=spectre;Password=spectre_dev_password
+```
+
+```powershell
+dotnet run --project Spectre.InvestigationHost --configuration Release
+```
+
+Starting the API does not start ingestion. Trigger ingestion explicitly:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -ContentType "application/json" `
+  -Body '{"inputPath":"d:\\Proj\\data\\cadets"}' `
+  http://localhost:5143/api/ingestion/start
+```
+
+Cancel an active run:
+
+```powershell
+Invoke-RestMethod -Method Post http://localhost:5143/api/ingestion/cancel
+```
+
+If the host is stopped while a run is active, the next startup marks the old
+persisted `Running` row as `Failed`/partial. A run is only active when started
+by this API process.
 
 The frontend expects the API at `http://localhost:5000` unless configured
 otherwise. CORS is currently open to `http://localhost:3000` for local Next.js
 development.
 
+Set `ConnectionStrings:InvestigationStore` to use a different PostgreSQL
+instance. `Database:ApplyMigrationsOnStartup` defaults to `true`, so the host
+applies the investigation-store EF migration at startup.
+
 ## HTTP API
 
 | Route | Notes |
 |---|---|
-| `GET /api/status` | Current run state, partial flag, elapsed seconds, and latest metrics. |
+| `GET /api/runs` | Recent persisted runs, newest first, with family/window counts. |
+| `GET /api/status` | Current run state, partial flag, elapsed seconds, and latest metrics. Accepts optional `runId`. |
+| `POST /api/ingestion/start` | Starts ingestion. Optional JSON body: `{ "inputPath": "d:\\Proj\\data\\cadets" }`. |
+| `POST /api/ingestion/cancel` | Requests cancellation for the active ingestion run. |
 | `GET /api/memory` | Retention counts, estimated retained bytes, process memory, and eviction counters. |
-| `GET /api/families` | Observed input families. During active ingestion, response is `Cache-Control: no-store`. |
-| `GET /api/families/{familyId}/windows` | Slice summaries for one family. |
-| `GET /api/predicates` | Observed predicates for graph filtering. |
-| `GET /api/node-kinds` | Observed node kinds for graph filtering. |
-| `GET /api/families/{familyId}/windows/{windowStart}/graph` | Bounded graph projection. |
-| `GET /api/families/{familyId}/windows/{windowStart}/nodes/{nodeId}` | Detailed node terms and weights. |
-| `GET /api/families/{familyId}/windows/{windowStart}/interactions/{source}/{target}` | Detailed interaction breakdown and evidence. |
+| `GET /api/families` | Observed input families. Accepts optional `runId`. During active ingestion, response is `Cache-Control: no-store`. |
+| `GET /api/families/{familyId}/windows` | Slice summaries for one family. Accepts optional `runId`. |
+| `GET /api/predicates` | Observed predicates for graph filtering. Accepts optional `runId`. |
+| `GET /api/node-kinds` | Observed node kinds for graph filtering. Accepts optional `runId`. |
+| `GET /api/families/{familyId}/windows/{windowStart}/graph` | Bounded graph projection. Accepts optional `runId`. |
+| `GET /api/families/{familyId}/windows/{windowStart}/nodes/{nodeId}` | Detailed node terms and weights. Accepts optional `runId`. |
+| `GET /api/families/{familyId}/windows/{windowStart}/interactions/{source}/{target}` | Detailed interaction breakdown and evidence. Accepts optional `runId`. |
+
+When `runId` is omitted, read routes resolve against the newest run. Historical
+runs are read-only; ingestion start/cancel always target the active API process.
 
 Graph query parameters:
 
@@ -41,9 +81,8 @@ Graph query parameters:
 | `predicate` | unset | must be an observed predicate when supplied |
 | `nodeKind` | unset | must be an observed node kind when supplied |
 
-Unknown families/windows return `404`. Windows retained only as summaries, or
-projection-retained windows requested with non-default graph filters, return
-`410 Gone`.
+Unknown families/windows return `404`. A future pruned-detail summary can return
+`410 Gone`, but the PostgreSQL store persists detailed windows by default.
 
 ## Server-Sent Events
 

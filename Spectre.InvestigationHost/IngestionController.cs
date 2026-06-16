@@ -1,40 +1,74 @@
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Spectre.CdmIngestion;
 using Spectre.CdmIngestion.Pipeline;
 using Spectre.CdmIngestion.Projection;
 using Spectre.CdmIngestion.Readers;
-using Spectre.CdmIngestion.Sinks;
-using Spectre.SemanticIndexing.Sinks;
-using Spectre.InvestigationHost.Store;
-using Spectre.SemanticIndexing;
-using Spectre.CdmIngestion;
 using Spectre.DisparityFiltering;
 using Spectre.DisparityFiltering.Sinks;
+using Spectre.InvestigationHost.Store;
+using Spectre.SemanticIndexing;
+using Spectre.SemanticIndexing.Sinks;
 
 namespace Spectre.InvestigationHost;
 
-public sealed class IngestionBackgroundService : BackgroundService
-{
-    private readonly DashboardQueryStore _store;
-    private readonly IConfiguration _config;
-    private readonly ILogger<IngestionBackgroundService> _logger;
+public sealed record StartIngestionRequest(string? InputPath);
 
-    public IngestionBackgroundService(DashboardQueryStore store, IConfiguration config, ILogger<IngestionBackgroundService> logger)
+public sealed record IngestionControlResult(bool Accepted, string Message, RunStatusDto Status);
+
+public sealed class IngestionController
+{
+    private readonly IInvestigationStore _store;
+    private readonly IConfiguration _config;
+    private readonly ILogger<IngestionController> _logger;
+    private readonly object _lock = new();
+    private CancellationTokenSource? _runCts;
+    private Task? _runTask;
+
+    public IngestionController(IInvestigationStore store, IConfiguration config, ILogger<IngestionController> logger)
     {
         _store = store;
         _config = config;
         _logger = logger;
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    public IngestionControlResult Start(string? inputPath)
     {
-        return Task.Run(() => RunIngestion(stoppingToken), CancellationToken.None);
+        lock (_lock)
+        {
+            if (_runTask is { IsCompleted: false })
+            {
+                return new IngestionControlResult(false, "Ingestion is already running.", _store.GetRunStatus());
+            }
+
+            var resolvedInputPath = string.IsNullOrWhiteSpace(inputPath)
+                ? _config.GetValue<string>("InputPath") ?? "d:\\Proj\\data\\cadets"
+                : inputPath;
+
+            _runCts?.Dispose();
+            _runCts = new CancellationTokenSource();
+            _runTask = Task.Run(() => RunIngestion(resolvedInputPath, _runCts.Token), CancellationToken.None);
+
+            return new IngestionControlResult(true, $"Ingestion started from {resolvedInputPath}.", _store.GetRunStatus());
+        }
     }
 
-    private void RunIngestion(CancellationToken ct)
+    public IngestionControlResult Cancel()
     {
-        var inputPath = _config.GetValue<string>("InputPath") ?? "d:\\Proj\\data\\cadets";
+        lock (_lock)
+        {
+            if (_runTask is not { IsCompleted: false } || _runCts is null)
+            {
+                return new IngestionControlResult(false, "No ingestion run is active.", _store.GetRunStatus());
+            }
+
+            _runCts.Cancel();
+            return new IngestionControlResult(true, "Cancellation requested.", _store.GetRunStatus());
+        }
+    }
+
+    private void RunIngestion(string inputPath, CancellationToken ct)
+    {
         var indexingOptions = new SemanticIndexingOptions();
         var defaultFilteringOptions = new DisparityFilterOptions();
         var filteringOptions = new DisparityFilterOptions
@@ -45,7 +79,7 @@ public sealed class IngestionBackgroundService : BackgroundService
         };
         SemanticIndexingGraphFactSink? indexingSink = null;
         DisparityFilteringSemanticGraphSliceSink? filteringSink = null;
-        
+
         _logger.LogInformation("Starting ingestion from {InputPath}", inputPath);
         _store.MarkRunState(RunState.Running);
 
@@ -58,7 +92,7 @@ public sealed class IngestionBackgroundService : BackgroundService
 
             var result = runner.Run(
                 new[] { inputPath },
-                () => 
+                () =>
                 {
                     var sinkAdapter = new DashboardSliceSinkAdapter(_store);
                     filteringSink = new DisparityFilteringSemanticGraphSliceSink(sinkAdapter, filteringOptions);
@@ -75,13 +109,13 @@ public sealed class IngestionBackgroundService : BackgroundService
                 _ => RunState.Failed
             };
 
-            bool isPartial = result.Outcome != IngestionOutcome.Completed;
+            var isPartial = result.Outcome != IngestionOutcome.Completed;
 
-            if (result.Exception != null)
+            if (result.Exception is not null)
             {
                 _logger.LogError(result.Exception, "Ingestion runner returned an exception.");
             }
-            
+
             _store.MarkRunState(
                 finalState,
                 isPartial: isPartial,
