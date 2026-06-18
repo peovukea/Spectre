@@ -9,8 +9,8 @@ graph state.
 
 | Project | Purpose |
 |---|---|
-| [`Spectre.CdmIngestion`](Spectre.CdmIngestion/README.md) | Reusable family discovery, Avro reader, normalized datum boundary, projector, sinks, and metrics. |
-| [`Spectre.CdmIngestion.Tests`](Spectre.CdmIngestion.Tests/README.md) | Unit and deterministic Avro object-container tests. |
+| [`Spectre.Ingestion`](Spectre.Ingestion/README.md) | Reusable family discovery, Avro reader, normalized datum boundary, projector, sinks, and metrics. |
+| [`Spectre.Ingestion.Tests`](Spectre.Ingestion.Tests/README.md) | Unit and deterministic Avro object-container tests. |
 | [`Spectre.SemanticIndexing`](Spectre.SemanticIndexing/README.md) | Streaming Layer 2 behavioral documents, semantic interactions, TF-IDF, and exact Jaccard scoring. |
 | [`Spectre.SemanticIndexing.Tests`](Spectre.SemanticIndexing.Tests) | Focused handcrafted graph-fact tests for Layer 2. |
 | [`Spectre.DisparityFiltering`](Spectre.DisparityFiltering/README.md) | Slice-bounded Layer 3 directed disparity filtering and backbone extraction. |
@@ -40,8 +40,8 @@ are merged and processed in global ordinal base-path order.
 ## Build And Test
 
 ```powershell
-dotnet build Spectre.CdmIngestion.slnx
-dotnet test Spectre.CdmIngestion.slnx
+dotnet build Spectre.Ingestion.slnx
+dotnet test Spectre.Ingestion.slnx
 ```
 
 ## Run
@@ -81,7 +81,7 @@ timestamps. Failed and canceled runs preserve and print partial metrics.
 
 ## Generated CDM18 Records
 
-The committed files under `Spectre.CdmIngestion/Generated/Cdm18` are generated
+The committed files under `Spectre.Ingestion/Generated/Cdm18` are generated
 from `TCCDMDatum.avsc`. Their CLR namespace intentionally matches the Avro
 full-name namespace so Apache Avro specific-record resolution remains compatible
 with the embedded writer schema.

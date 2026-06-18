@@ -18,9 +18,6 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Shared/Spectre.Ingestion.Api/Spectre.Ingestion.Api.csproj" />
-    <ProjectReference Include="../../src/Shared/Spectre.Indexing.Api/Spectre.Indexing.Api.csproj" />
-    <ProjectReference Include="../../src/Shared/Spectre.Backbone.Api/Spectre.Backbone.Api.csproj" />
     <ProjectReference Include="../../src/Ingestion/Spectre.Ingestion/Spectre.Ingestion.csproj" />
-    <ProjectReference Include="../../src/Backbone/Spectre.DisparityFiltering/Spectre.DisparityFiltering.csproj" />
   </ItemGroup>
 </Project>

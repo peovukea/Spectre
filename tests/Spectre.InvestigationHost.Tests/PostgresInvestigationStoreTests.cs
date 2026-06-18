@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
-using Spectre.CdmIngestion;
+using Spectre.Ingestion;
 using Spectre.DisparityFiltering;
 using Spectre.InvestigationHost.Data;
 using Spectre.InvestigationHost.Store;

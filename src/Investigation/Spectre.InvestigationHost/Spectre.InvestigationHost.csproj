@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Ingestion\Spectre.CdmIngestion\Spectre.CdmIngestion.csproj" />
     <ProjectReference Include="..\..\Backbone\Spectre.DisparityFiltering\Spectre.DisparityFiltering.csproj" />
     <ProjectReference Include="..\..\Shared\Spectre.Ingestion.Api\Spectre.Ingestion.Api.csproj" />
     <ProjectReference Include="..\..\Shared\Spectre.Indexing.Api\Spectre.Indexing.Api.csproj" />
     <ProjectReference Include="..\..\Shared\Spectre.Backbone.Api\Spectre.Backbone.Api.csproj" />
     <ProjectReference Include="..\..\Shared\Spectre.Investigation.Api\Spectre.Investigation.Api.csproj" />
     <ProjectReference Include="..\..\Shared\Spectre.Pipeline.Api\Spectre.Pipeline.Api.csproj" />
+    <ProjectReference Include="..\..\Ingestion\Spectre.Ingestion\Spectre.Ingestion.csproj" />
     <ProjectReference Include="..\..\Indexing\Spectre.SemanticIndexing\Spectre.SemanticIndexing.csproj" />
   </ItemGroup>
 

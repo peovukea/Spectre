@@ -1,4 +1,4 @@
-using Spectre.CdmIngestion;
+using Spectre.Ingestion;
 using Spectre.DisparityFiltering.Sinks;
 using Spectre.SemanticIndexing;
 

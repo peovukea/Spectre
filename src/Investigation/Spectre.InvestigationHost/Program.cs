@@ -1,11 +1,10 @@
+using System.Reflection;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 using Npgsql;
-using Spectre.CdmIngestion.Pipeline;
-using Spectre.CdmIngestion.Projection;
-using Spectre.CdmIngestion.Readers;
+using Spectre.Ingestion.Pipeline;
+using Spectre.Ingestion.Projection;
+using Spectre.Ingestion.Readers;
 using Spectre.DisparityFiltering;
 using Spectre.InvestigationHost.Data;
 using Spectre.InvestigationHost;
@@ -13,6 +12,7 @@ using Spectre.SemanticIndexing;
 using Spectre.InvestigationHost.Store;
 
 var builder = WebApplication.CreateBuilder(args);
+var isOpenApiDocumentGeneration = Assembly.GetEntryAssembly()?.GetName().Name == "GetDocument.Insider";
 
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
@@ -31,7 +31,7 @@ builder.Services.AddSingleton<IIngestionStage>(_ =>
     var reader = new AvroReader(_2 => { });
     var projector = new GraphFactProjector();
     var pipeline = new IngestionPipeline(reader, projector);
-    return new CdmIngestionRunner(pipeline);
+    return new IngestionRunner(pipeline);
 });
 builder.Services.AddSingleton<IIndexingStage, SemanticIndexingStage>();
 builder.Services.AddSingleton<IBackboneStage, BackboneStage>();
@@ -49,14 +49,17 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
-if (builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
+if (!isOpenApiDocumentGeneration && builder.Configuration.GetValue("Database:ApplyMigrationsOnStartup", true))
 {
     using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<InvestigationDbContext>();
     db.Database.Migrate();
 }
 
-app.Services.GetRequiredService<IInvestigationRunStore>().RecoverInterruptedRuns();
+if (!isOpenApiDocumentGeneration)
+{
+    app.Services.GetRequiredService<IInvestigationRunStore>().RecoverInterruptedRuns();
+}
 
 app.UseCors();
 

@@ -1,4 +1,4 @@
-using Spectre.CdmIngestion;
+using Spectre.Ingestion;
 using Spectre.SemanticIndexing.Sinks;
 
 namespace Spectre.SemanticIndexing.Tests;

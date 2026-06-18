@@ -19,7 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Shared/Spectre.Ingestion.Api/Spectre.Ingestion.Api.csproj" />
     <ProjectReference Include="../../src/Shared/Spectre.Indexing.Api/Spectre.Indexing.Api.csproj" />
-    <ProjectReference Include="../../src/Ingestion/Spectre.CdmIngestion/Spectre.CdmIngestion.csproj" />
+    <ProjectReference Include="../../src/Ingestion/Spectre.Ingestion/Spectre.Ingestion.csproj" />
     <ProjectReference Include="../../src/Indexing/Spectre.SemanticIndexing/Spectre.SemanticIndexing.csproj" />
   </ItemGroup>
 </Project>

@@ -11,6 +11,5 @@
     <Compile Remove="Sinks\ISemanticGraphSliceSink.cs" />
     <ProjectReference Include="../../Shared/Spectre.Ingestion.Api/Spectre.Ingestion.Api.csproj" />
     <ProjectReference Include="../../Shared/Spectre.Indexing.Api/Spectre.Indexing.Api.csproj" />
-    <ProjectReference Include="../../Ingestion/Spectre.CdmIngestion/Spectre.CdmIngestion.csproj" />
   </ItemGroup>
 </Project>
